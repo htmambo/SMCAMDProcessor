@@ -6,4 +6,4 @@ SMCAMDProcessor.xcodeproj/
 .DS_Store
 build
 cleanup.py
-
+.omc
