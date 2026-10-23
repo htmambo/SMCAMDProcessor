@@ -45,11 +45,11 @@ class SystemMonitorViewController: NSViewController, NSTableViewDelegate, NSTabl
         if initRes[0] != 1{
             
             let alert = NSAlert()
-            alert.messageText = "Could not found driver for your SMC."
-            alert.informativeText = "Your SMC chip is likely not supported yet."
+            alert.messageText = NSLocalizedString("Could not found driver for your SMC.", comment: "Alert title shown when the SMC chip is not supported")
+            alert.informativeText = NSLocalizedString("Your SMC chip is likely not supported yet.", comment: "Alert message shown when the SMC chip is not supported")
             alert.alertStyle = .critical
-            alert.addButton(withTitle: "Done")
-            alert.addButton(withTitle: "Report Issue")
+            alert.addButton(withTitle: NSLocalizedString("Done", comment: "Button title to close the alert"))
+            alert.addButton(withTitle: NSLocalizedString("Report Issue", comment: "Button title to open the issue tracker"))
             let res = alert.runModal()
             
             if res == .alertSecondButtonReturn {
@@ -61,8 +61,9 @@ class SystemMonitorViewController: NSViewController, NSTableViewDelegate, NSTabl
         ProcessorModel.shared.fetchSMCChipSupport(chipIntel: Int(initRes[1]), working: initRes[0] == 1)
         
         chipIntelLabel.stringValue =
-            String(format: "Chip ID: %X, Revision: %X, \(driverLoaded ? "Connected" : "Not yet supported")",
-                    initRes[1] >> 8, initRes[1] & 0xff)
+            String(format: NSLocalizedString("Chip ID: %X, Revision: %X, %@", comment: "SMC chip identifier, revision and driver connection status"),
+                    UInt32(initRes[1] >> 8), UInt32(initRes[1] & 0xff),
+                    driverLoaded ? NSLocalizedString("Connected", comment: "SMC driver connection status: connected") : NSLocalizedString("Not yet supported", comment: "SMC driver connection status: not yet supported"))
         
         if driverLoaded {
             numFans = Int(ProcessorModel.shared.kernelGetUInt64(count: 1, selector: 91)[0])

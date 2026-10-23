@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		22E78A4B308B4DC3006946CD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 22E78A49308B4DC3006946CD /* InfoPlist.strings */; };
+		22E78A4E308B4DC3006946CD /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 22E78A4C308B4DC3006946CD /* Localizable.strings */; };
+		22E78A51308B4DC3006946CD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 22E78A4F308B4DC3006946CD /* InfoPlist.strings */; };
 		5B72086C247C884C00BF7492 /* ISSuperIOIT86XXEFamily.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 5B72086A247C884C00BF7492 /* ISSuperIOIT86XXEFamily.hpp */; };
 		5B72086D247C884C00BF7492 /* ISSuperIOIT86XXEFamily.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5B72086B247C884C00BF7492 /* ISSuperIOIT86XXEFamily.cpp */; };
 		B5011EA1242E01CC009FB2A2 /* SMCAMDProcessor.hpp in Headers */ = {isa = PBXBuildFile; fileRef = B5011EA0242E01CC009FB2A2 /* SMCAMDProcessor.hpp */; };
@@ -67,6 +70,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		22E78A48308B4DC3006946CD /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
+		22E78A4A308B4DC3006946CD /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		22E78A4D308B4DC3006946CD /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		22E78A50308B4DC3006946CD /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		5B72086A247C884C00BF7492 /* ISSuperIOIT86XXEFamily.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ISSuperIOIT86XXEFamily.hpp; sourceTree = "<group>"; };
 		5B72086B247C884C00BF7492 /* ISSuperIOIT86XXEFamily.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ISSuperIOIT86XXEFamily.cpp; sourceTree = "<group>"; };
 		B5011E9E242E01CC009FB2A2 /* SMCAMDProcessor.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SMCAMDProcessor.kext; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -191,6 +198,8 @@
 				B56162CC2400EF780006A7D8 /* Main.storyboard */,
 				B56162CA2400EF780006A7D8 /* Assets.xcassets */,
 				B56162CF2400EF780006A7D8 /* Info.plist */,
+				22E78A4C308B4DC3006946CD /* Localizable.strings */,
+				22E78A49308B4DC3006946CD /* InfoPlist.strings */,
 				B56162D02400EF780006A7D8 /* AMD_Power_Gadget.entitlements */,
 			);
 			path = "AMD Power Gadget";
@@ -330,6 +339,7 @@
 			children = (
 				B5CE1F7E26B4271800DBF70A /* AppDelegate.swift */,
 				B5CE1F8526B4271900DBF70A /* Info.plist */,
+				22E78A4F308B4DC3006946CD /* InfoPlist.strings */,
 				B5CE1F8626B4271900DBF70A /* APGLaunchHelper.entitlements */,
 				B5CE1F8A26B4294000DBF70A /* main.swift */,
 			);
@@ -479,6 +489,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = B57D27EA23F66AE7002BC699;
 			productRefGroup = B57D27F523F66AE7002BC699 /* Products */;
@@ -506,9 +517,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				B595D3E52416702000B704F7 /* SF-Pro-Rounded-Semibold.otf in Resources */,
+				22E78A4E308B4DC3006946CD /* Localizable.strings in Resources */,
 				B595D3E42416701D00B704F7 /* SF-Pro-Rounded-Medium.otf in Resources */,
 				B56162CB2400EF780006A7D8 /* Assets.xcassets in Resources */,
 				B56162CE2400EF780006A7D8 /* Main.storyboard in Resources */,
+				22E78A4B308B4DC3006946CD /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -523,6 +536,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				22E78A51308B4DC3006946CD /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -585,10 +599,35 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
+		22E78A49308B4DC3006946CD /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				22E78A4A308B4DC3006946CD /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		22E78A4C308B4DC3006946CD /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				22E78A4D308B4DC3006946CD /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		22E78A4F308B4DC3006946CD /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				22E78A50308B4DC3006946CD /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
 		B56162CC2400EF780006A7D8 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
 				B56162CD2400EF780006A7D8 /* Base */,
+				22E78A48308B4DC3006946CD /* zh-Hans */,
 			);
 			name = Main.storyboard;
 			sourceTree = "<group>";
@@ -819,7 +858,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 0.7.2;
+				CURRENT_PROJECT_VERSION = 0.7.5;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
@@ -837,7 +876,7 @@
 				KERNEL_FRAMEWORK_HEADERS = "${PROJECT_DIR}/MacKernelSDK/Headers";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/MacKernelSDK/Library/universal";
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.5;
 				MODULE_NAME = wtf.spinach.AMDRyzenCPUPowerManagement;
 				MODULE_START = amdryzencpupm_kern_start;
 				MODULE_STOP = amdryzencpupm_kern_stop;
@@ -869,7 +908,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 0.7.2;
+				CURRENT_PROJECT_VERSION = 0.7.5;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"PRODUCT_NAME=$(PRODUCT_NAME)",
 					"MODULE_VERSION=$(MODULE_VERSION)",
@@ -885,7 +924,7 @@
 				KERNEL_FRAMEWORK_HEADERS = "${PROJECT_DIR}/MacKernelSDK/Headers";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/MacKernelSDK/Library/universal";
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
-				MARKETING_VERSION = 0.7.2;
+				MARKETING_VERSION = 0.7.5;
 				MODULE_NAME = wtf.spinach.AMDRyzenCPUPowerManagement;
 				MODULE_START = amdryzencpupm_kern_start;
 				MODULE_STOP = amdryzencpupm_kern_stop;

@@ -52,13 +52,12 @@ fileprivate class StatusbarView: NSView{
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         
-        let fr = String(format: "%.1f", meanFreq * 0.001)
-//        drawCompactSingle(label: "AVG", value: "\(fr) Ghz", x: 0)
-        
-        let mfr = String(format: "%.1f", maxFreq * 0.001)
-        
-        
-        drawDoubleCompactValue(label: "CPU", up: "\(mfr) Ghz", down: "\(fr) Ghz", x: 0)
+//        drawCompactSingle(label: "AVG", value: String(format: NSLocalizedString("%.1f GHz", comment: "Average core frequency shown in the menu bar"), meanFreq * 0.001), x: 0)
+
+        drawDoubleCompactValue(label: "CPU",
+                               up: String(format: NSLocalizedString("%.1f GHz", comment: "Maximum core frequency shown in the menu bar"), maxFreq * 0.001),
+                               down: String(format: NSLocalizedString("%.1f GHz", comment: "Average core frequency shown in the menu bar"), meanFreq * 0.001),
+                               x: 0)
         drawCompactSingle(label: "TEM", value: "\(Int(round(temp)))º", x: 80)
         drawCompactSingle(label: "PWR", value: "\(Int(round(pwr)))W", x: 122)
     }
@@ -178,17 +177,17 @@ class StatusbarController {
     private func addMenuItems() {
         menu = NSMenu()
         guard let m = menu else {return}
-        var item = NSMenuItem(title: "AMD Power Gadget", action: #selector(gadget), keyEquivalent: ""); item.target = self
+        var item = NSMenuItem(title: NSLocalizedString("AMD Power Gadget", comment: "Status bar menu item opening the power gadget window"), action: #selector(gadget), keyEquivalent: ""); item.target = self
         m.addItem(item)
-        item = NSMenuItem(title: "AMD Power Tool", action: #selector(tool), keyEquivalent: ""); item.target = self
+        item = NSMenuItem(title: NSLocalizedString("AMD Power Tool", comment: "Status bar menu item opening the power tool window"), action: #selector(tool), keyEquivalent: ""); item.target = self
         m.addItem(item)
-        item = NSMenuItem(title: "SMC Fans", action: #selector(fans), keyEquivalent: ""); item.target = self
+        item = NSMenuItem(title: NSLocalizedString("SMC Fans", comment: "Status bar menu item opening the fan control window"), action: #selector(fans), keyEquivalent: ""); item.target = self
         m.addItem(item)
-        
-        
+
+
         m.addItem(NSMenuItem.separator())
-        
-        item = NSMenuItem(title: "Exit", action: #selector(exitApp), keyEquivalent: ""); item.target = self
+
+        item = NSMenuItem(title: NSLocalizedString("Exit", comment: "Status bar menu item quitting the application"), action: #selector(exitApp), keyEquivalent: ""); item.target = self
         m.addItem(item)
         
 //        statusItem.menu = menu

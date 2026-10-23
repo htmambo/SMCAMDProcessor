@@ -40,16 +40,16 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
     @IBOutlet weak var boardHelpButton: NSButton!
     @IBAction func boardHelp(_ sender: Any) {
         let alert = NSAlert()
-        alert.messageText = "To enable motherboard display:"
-        alert.informativeText = """
+        alert.messageText = NSLocalizedString("To enable motherboard display:", comment: "Title of the help alert for showing motherboard information")
+        alert.informativeText = NSLocalizedString("""
         Open your OpenCore config file,
-        
+
         Go to Misc -> Security -> ExposeSensitiveData,
-        
+
         Set the value to 0x08 to expose board information.
-        """
+        """, comment: "Instructions for exposing motherboard information in OpenCore")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Done")
+        alert.addButton(withTitle: NSLocalizedString("Done", comment: "Button title to close the alert"))
         alert.beginSheetModal(for: view.window!, completionHandler: nil)
     }
     @IBOutlet weak var cpbSupportedBox: NSButton!
@@ -161,7 +161,7 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
 
         if sumCount >= Int(1 / updateTime) {
             
-            topLabel1.stringValue = String(format: "%.1f Ghz", freqMax * 0.001)
+            topLabel1.stringValue = String(format: NSLocalizedString("%.1f GHz", comment: "Maximum core frequency shown in the power tool"), freqMax * 0.001)
             topLabel2.stringValue = suffixNumber(number: NSNumber(value: instDelta))
 
             sumCount = 0
@@ -185,7 +185,7 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
     
     func setupOverview() {
         let id = ProcessorModel.shared.cpuidBasic
-        let supported = id[7] == 1 ? "Yes" : "Not yet :)"
+        let supported = id[7] == 1 ? NSLocalizedString("Yes", comment: "CPU support status: supported") : NSLocalizedString("Not yet :)", comment: "CPU support status: not yet supported")
         
         let memGB = Int(ProcessorModel.shared.systemConfig["mem"]!)! / 1024
         var storageGB = "?"
@@ -193,22 +193,30 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
             storageGB = "\(Int(rs)! / 1024)"
         }
          
-        basicLabel.stringValue = """
-        \(ProcessorModel.shared.systemConfig["cpu"]!)
-        Family: \(String(format:"%02X", id[0]))h, Model: \(String(format:"%02X", id[1]))h
-        Physical: \(id[2]), Logical: \(id[3])
-        L1(Total): \(id[4] * id[2]) KB, L2(Total): \(id[5] * id[2] / 1024) MB, L3(Shared): \(id[6] / 1024) MB
-        
-        Motherboard: \(ProcessorModel.shared.boardName)
-        \(ProcessorModel.shared.boardVender)
-        Graphics: \(ProcessorModel.shared.systemConfig["gpu"]!)
-        Memory: \(memGB)GB, Storage: \(storageGB)GB
-        
-        macOS Version: \(ProcessorModel.shared.systemConfig["os"]!)
+        basicLabel.stringValue = String(format: NSLocalizedString("""
+        %@
+        Family: %02Xh, Model: %02Xh
+        Physical: %d, Logical: %d
+        L1(Total): %d KB, L2(Total): %d MB, L3(Shared): %d MB
+
+        Motherboard: %@
+        %@
+        Graphics: %@
+        Memory: %dGB, Storage: %@GB
+
+        macOS Version: %@
         AMDRyzenCPUPowerManagement:
-          Version: \(ProcessorModel.shared.AMDRyzenCPUPowerManagementVersion), CPU Supported: \(supported)
-        
-        """
+          Version: %@, CPU Supported: %@
+        """, comment: "System information overview shown in the power tool"),
+        ProcessorModel.shared.systemConfig["cpu"]!,
+        UInt32(id[0]), UInt32(id[1]), UInt32(id[2]), UInt32(id[3]), UInt32(id[4] * id[2]), UInt32(id[5] * id[2] / 1024), UInt32(id[6] / 1024),
+        ProcessorModel.shared.boardName,
+        ProcessorModel.shared.boardVender,
+        ProcessorModel.shared.systemConfig["gpu"]!,
+        memGB, storageGB,
+        ProcessorModel.shared.systemConfig["os"]!,
+        ProcessorModel.shared.AMDRyzenCPUPowerManagementVersion,
+        supported)
         if ProcessorModel.shared.boardValid {
             boardHelpButton.removeFromSuperview()
         }
@@ -219,7 +227,7 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
         vaildStatesClock = ProcessorModel.shared.getVaildPStateClocks()
         let pstateCur = ProcessorModel.shared.getPState()
         let s = ProcessorModel.shared.getPPM()
-        let pdt = vaildStatesClock.map{ "\(Int($0))Mhz" }
+        let pdt = vaildStatesClock.map{ String(format: NSLocalizedString("%dMHz", comment: "Frequency of a speed step option"), Int($0)) }
         overviewSpeedShift.setOptions(newOptions: pdt, selection: s ? -1 : pstateCur)
     }
     

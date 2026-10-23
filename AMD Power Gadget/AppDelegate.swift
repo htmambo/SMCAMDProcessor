@@ -95,11 +95,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func askStartup() {
         let alert = NSAlert()
-        alert.messageText = "Startup at login?"
-        alert.informativeText = "Do you want AMD Power Gadget to start in menu bar at login? \n\n This will only be asked once. You can change this setting later under Appearance menu."
+        alert.messageText = NSLocalizedString("Startup at login?", comment: "Title of the alert asking whether to start the app at login")
+        alert.informativeText = NSLocalizedString("Do you want AMD Power Gadget to start in menu bar at login? \n\n This will only be asked once. You can change this setting later under Appearance menu.", comment: "Message of the alert asking whether to start the app at login")
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "Yes")
-        alert.addButton(withTitle: "No")
+        alert.addButton(withTitle: NSLocalizedString("Yes", comment: "Button title to enable starting the app at login"))
+        alert.addButton(withTitle: NSLocalizedString("No", comment: "Button title to decline starting the app at login"))
         let res = alert.runModal()
         
         if res == .alertFirstButtonReturn {
@@ -113,7 +113,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationWillTerminate(_ aNotification: Notification) {
         // Insert code here to tear down your application
-        ProcessorModel.shared.closeDriver()
+        // Only tear down the driver if it was already initialized. Touching
+        // ProcessorModel.shared here would force its lazy initialization to run
+        // while the app is terminating, which re-enters the very dispatch_once
+        // that is still in flight and traps with SIGILL.
+        if ProcessorModel.isInitialized {
+            ProcessorModel.shared.closeDriver()
+        }
     }
     
     func applyAppearanceSwitch(translucency : Bool) {

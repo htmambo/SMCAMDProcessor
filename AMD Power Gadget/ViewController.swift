@@ -122,11 +122,13 @@ class ViewController: NSViewController, NSWindowDelegate {
         frequencyGraphView.addData(forline: freqMaxLine, x: relTime, y: maxFre)
         frequencyGraphView.addData(forline: freqLine, x: relTime, y: meanFre)
         
-        frequencyLabel.stringValue = String(format: "Average of %d Cores: %.2f Ghz, Max: %.2f Ghz", numberOfCores, meanFre * 0.001, frequencies.max()! * 0.001)
+        frequencyLabel.stringValue = String(format: NSLocalizedString("Average of %d Cores: %.2f GHz, Max: %.2f GHz",
+                                                                      comment: "Average and maximum core frequency summary"),
+                                            numberOfCores, meanFre * 0.001, frequencies.max()! * 0.001)
 
 
-        temperatureLabel.stringValue = String(format: "%.2f °C", temperature)
-        powerLabel.stringValue = String(format: "%.2f Watt", power)
+        temperatureLabel.stringValue = String(format: NSLocalizedString("%.2f °C", comment: "Temperature reading"), temperature)
+        powerLabel.stringValue = String(format: NSLocalizedString("%.2f Watt", comment: "Power consumption reading"), power)
     }
     
     @IBAction func launchPowerTool(_ sender: Any) {

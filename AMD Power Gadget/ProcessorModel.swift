@@ -31,18 +31,58 @@ class ProcessorModel {
     var AMDRyzenCPUPowerManagementVersion : String = ""
     var cpuidBasic : [UInt64] = []
     var boardValid = false
-    var boardName : String = "Unknown"
-    var boardVender : String = "Unknown"
+    var boardName : String = NSLocalizedString("Unknown", comment: "Placeholder shown when the motherboard name is not available")
+    var boardVender : String = NSLocalizedString("Unknown", comment: "Placeholder shown when the motherboard vendor is not available")
     
     var fetchRetry : Int = 10
     var fetchRetry2 : Int = 10
     var retryTimer : Timer?
-    
+
+    /// Whether the shared instance finished initializing.
+    /// The termination handler uses this to avoid touching the lazily initialized
+    /// singleton, which would re-enter its own dispatch_once while it is still running.
+    static var isInitialized : Bool { return initialized }
+    private static var initialized = false
+
+    /// Oldest kext version whose user client API this app is able to talk to.
+    /// Anything newer than this stays compatible, so bumping the kext version
+    /// does not lock the app out.
+    private static let minimumCompatibleVersion = "0.6.3"
+
+    /// Newest kext version this app was built and tested against.
+    /// Only used to tell the user that a newer kext is available.
+    private static let latestKnownVersion = "0.7.5"
+
+    private static func versionComponents(_ version : String) -> [Int] {
+        version.split(separator: ".").map { Int($0) ?? 0 }
+    }
+
+    private static func compareVersions(_ lhs : String, _ rhs : String) -> ComparisonResult {
+        let l = versionComponents(lhs)
+        let r = versionComponents(rhs)
+        for index in 0..<max(l.count, r.count) {
+            let lv = index < l.count ? l[index] : 0
+            let rv = index < r.count ? r[index] : 0
+            if lv != rv {
+                return lv < rv ? .orderedAscending : .orderedDescending
+            }
+        }
+        return .orderedSame
+    }
+
+    private static func isCompatibleVersion(_ version : String) -> Bool {
+        return compareVersions(version, minimumCompatibleVersion) != .orderedAscending
+    }
+
     init() {
         if !initDriver() {
-            alertAndQuit(message: "Please download AMDRyzenCPUPowerManagement from the release page.")
+            alertAndQuit(title: NSLocalizedString("AMDRyzenCPUPowerManagement Not Found",
+                                                  comment: "Alert title shown when the AMDRyzenCPUPowerManagement driver is not loaded"),
+                         message: NSLocalizedString("Please download AMDRyzenCPUPowerManagement from the release page.",
+                                                    comment: "Alert message shown when the AMDRyzenCPUPowerManagement driver is not loaded"))
+            return
         }
-        
+
         var scalerOut: UInt64 = 0
         var outputCount: UInt32 = 0
 
@@ -54,15 +94,21 @@ class ProcessorModel {
                                       &outputStr, &outputStrCount)
         AMDRyzenCPUPowerManagementVersion = String(cString: Array(outputStr[0...outputStrCount-1]))
         
-        let compatVers = ["0.6.3", "0.6.4", "0.6.5", "0.6.6", "0.7", "0.7.1", "0.7.2"]
-        let latestMajorVers = ["0.7.2"]
-        
-        if !compatVers.contains(AMDRyzenCPUPowerManagementVersion){
-            alertAndQuit(message: "Your AMDRyzenCPUPowerManagement version is outdated and no longer API compatible. Please use the latest version and start this application again.")
+        // The app talks to the kext through its user client API, which only changes when
+        // the kext makes a breaking change. Comparing versions numerically means bumping
+        // the kext version no longer locks the app out.
+        if !Self.isCompatibleVersion(AMDRyzenCPUPowerManagementVersion) {
+            alertAndQuit(title: NSLocalizedString("AMDRyzenCPUPowerManagement Version Incompatible",
+                                                  comment: "Alert title shown when the loaded driver version is too old"),
+                         message: String(format: NSLocalizedString("Your AMDRyzenCPUPowerManagement version is %@, which is outdated and no longer API compatible. Please use the latest version and start this application again.",
+                                                                 comment: "Alert message shown when the loaded driver version is too old"),
+                                         AMDRyzenCPUPowerManagementVersion))
+            return
         }
         
-        if !latestMajorVers.contains(AMDRyzenCPUPowerManagementVersion){
-            alertDontQuit(message: "There are updates available for AMDRyzenCPUPowerManagement. Update to the latest version for more feature and stability.")
+        if Self.compareVersions(AMDRyzenCPUPowerManagementVersion, Self.latestKnownVersion) == .orderedAscending {
+            alertDontQuit(message: NSLocalizedString("There are updates available for AMDRyzenCPUPowerManagement. Update to the latest version for more feature and stability.",
+                                                     comment: "Alert message shown when a newer driver version exists"))
         }
         
         loadCPUID()
@@ -75,15 +121,16 @@ class ProcessorModel {
         
         if numberOfCores < 1{
             let alert = NSAlert()
-            alert.messageText = "Error reading CPU data."
-            alert.informativeText = "This application can not be launched due to AMDRyzenCPUPowerManagement is reporting incorrect data."
+            alert.messageText = NSLocalizedString("Error reading CPU data.", comment: "Alert title shown when the driver reports incorrect CPU data")
+            alert.informativeText = NSLocalizedString("This application can not be launched due to AMDRyzenCPUPowerManagement is reporting incorrect data.", comment: "Alert message shown when the driver reports incorrect CPU data")
             alert.alertStyle = .critical
-            alert.addButton(withTitle: "Quit")
+            alert.addButton(withTitle: NSLocalizedString("Quit", comment: "Button title to quit the application"))
             alert.runModal()
             NSApplication.shared.terminate(self)
         }
         
 //        fetchSupportedProcessor()
+        Self.initialized = true
     }
     
     func initDriver() -> Bool {
@@ -100,16 +147,18 @@ class ProcessorModel {
     }
     
     func closeDriver() {
+        if connect == 0 { return }
         IOServiceClose(connect)
+        connect = 0
     }
     
-    func alertAndQuit(message : String){
+    func alertAndQuit(title : String, message : String){
         let alert = NSAlert()
-        alert.messageText = "No AMDRyzenCPUPowerManagement Found!"
+        alert.messageText = title
         alert.informativeText = message
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "Quit")
-        alert.addButton(withTitle: "Quit and Download")
+        alert.addButton(withTitle: NSLocalizedString("Quit", comment: "Button title to quit the application"))
+        alert.addButton(withTitle: NSLocalizedString("Quit and Download", comment: "Button title to quit the application and open the download page"))
         let res = alert.runModal()
         
         if res == .alertSecondButtonReturn {
@@ -121,11 +170,11 @@ class ProcessorModel {
     
     func alertDontQuit(message : String){
         let alert = NSAlert()
-        alert.messageText = "Kext Update Available"
+        alert.messageText = NSLocalizedString("Kext Update Available", comment: "Alert title shown when a newer driver version exists")
         alert.informativeText = message
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Later")
-        alert.addButton(withTitle: "Download")
+        alert.addButton(withTitle: NSLocalizedString("Later", comment: "Button title to dismiss the update alert"))
+        alert.addButton(withTitle: NSLocalizedString("Download", comment: "Button title to open the download page"))
         let res = alert.runModal()
         
         if res == .alertSecondButtonReturn {
@@ -460,7 +509,7 @@ class ProcessorModel {
                             .trimmingCharacters(in: .controlCharacters)
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                     } else {
-                        systemConfig["gpu"] = "Unknown"
+                        systemConfig["gpu"] = NSLocalizedString("Unknown", comment: "Placeholder shown when the GPU model is not available")
                     }
                 }
             }

@@ -133,27 +133,27 @@ class PStateEditorViewController: NSViewController, NSTableViewDelegate, NSTable
     
     func alertInvaildInput(){
         let alert = NSAlert()
-        alert.messageText = "Invaild Input"
-        alert.informativeText = "Please type in numbers in hexadecimal."
+        alert.messageText = NSLocalizedString("Invaild Input", comment: "Alert title shown when a non-hexadecimal value is entered")
+        alert.informativeText = NSLocalizedString("Please type in numbers in hexadecimal.", comment: "Alert message shown when a non-hexadecimal value is entered")
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "Done")
+        alert.addButton(withTitle: NSLocalizedString("Done", comment: "Button title to close the alert"))
         alert.beginSheetModal(for: view.window!, completionHandler: nil)
     }
     
     func alertNoPrivilege(){
         let alert = NSAlert()
-        alert.messageText = "Unable to Set PStateDef"
-        alert.informativeText = """
+        alert.messageText = NSLocalizedString("Unable to Set PStateDef", comment: "Alert title shown when applying P-State settings fails")
+        alert.informativeText = NSLocalizedString("""
         Action was denied as current user does not have enough privilege,
         or was canceled by current user.
-        
-        
+
+
         Run AMD Power Gadget as root user or disable privilege check with boot-arg '-amdpnopchk'
-        
+
         Otherwise, click 'Once' in the warning message to allow this change.
-        """
+        """, comment: "Alert message shown when applying P-State settings fails")
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "Done")
+        alert.addButton(withTitle: NSLocalizedString("Done", comment: "Button title to close the alert"))
         alert.beginSheetModal(for: view.window!, completionHandler: nil)
     }
     
@@ -169,11 +169,11 @@ class PStateEditorViewController: NSViewController, NSTableViewDelegate, NSTable
         }
         
         let alert = NSAlert()
-        alert.messageText = "Your changes will not be saved"
-        alert.informativeText = "Click apply to save changes before closing this windows."
+        alert.messageText = NSLocalizedString("Your changes will not be saved", comment: "Alert title shown when closing the P-State editor with unsaved changes")
+        alert.informativeText = NSLocalizedString("Click apply to save changes before closing this windows.", comment: "Alert message shown when closing the P-State editor with unsaved changes")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Close without saving")
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Button title to cancel closing the window"))
+        alert.addButton(withTitle: NSLocalizedString("Close without saving", comment: "Button title to close the window discarding changes"))
         alert.beginSheetModal(for: view.window!) { (res) in
             if res == NSApplication.ModalResponse.alertSecondButtonReturn {
                 self.closeActually()

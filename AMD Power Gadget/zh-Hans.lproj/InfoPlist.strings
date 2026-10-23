@@ -1,0 +1,6 @@
+/* Bundle name */
+"CFBundleName" = "AMD Power Gadget";
+
+/* Copyright (human-readable) */
+"NSHumanReadableCopyright" = "版权所有 © 2020 trulyspinach。保留所有权利。";
+

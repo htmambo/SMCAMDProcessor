@@ -1,0 +1,330 @@
+/* Class = "NSTextFieldCell"; title = "Configurations"; ObjectID = "0ap-fT-RXi"; */
+"0ap-fT-RXi.title" = "配置";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "0f9-LD-2CD"; */
+"0f9-LD-2CD.title" = "Text Cell";
+
+/* Class = "NSWindow"; title = "SMC Fans"; ObjectID = "0qo-qi-5WU"; */
+"0qo-qi-5WU.title" = "SMC 风扇";
+
+/* Class = "NSTextFieldCell"; title = "WARNING: Incorrect operation can lead to permanent damage to your hardware. Use the \"Close\" button to leave without making any changes. "; ObjectID = "0WX-x7-Srn"; */
+"0WX-x7-Srn.title" = "警告：操作不当可能会对硬件造成永久损坏。请使用“关闭”按钮离开，不做任何更改。";
+
+/* Class = "NSTextFieldCell"; title = "Core Performance Boost allows your processor use its hardware module to monitor the load of each core and dynamically increase the performance of a loaded core while keep the total power consumption under an internally defined value.   After a reboot your EFI BIOS will reset this setting."; ObjectID = "1o5-Lh-7Ab"; */
+"1o5-Lh-7Ab.title" = "核心性能加速（Core Performance Boost）允许处理器通过其硬件模块监控每个核心的负载，并在将总功耗控制在内部设定值以内的同时，动态提升负载核心的性能。  重新启动后，EFI BIOS 会重置此设置。";
+
+/* Class = "NSTableColumn"; headerCell.title = "Scale"; ObjectID = "1pT-Cn-Ijo"; */
+"1pT-Cn-Ijo.headerCell.title" = "比例";
+
+/* Class = "NSTableColumn"; headerCell.title = "RPM"; ObjectID = "1TT-ha-UxI"; */
+"1TT-ha-UxI.headerCell.title" = "RPM";
+
+/* Class = "NSTextFieldCell"; title = "3.4Ghz"; ObjectID = "1u3-hj-qcH"; */
+"1u3-hj-qcH.title" = "3.4GHz";
+
+/* Class = "NSMenuItem"; title = "AMD Power Tool"; ObjectID = "1UK-8n-QPP"; */
+"1UK-8n-QPP.title" = "AMD Power Tool";
+
+/* Class = "NSTextFieldCell"; title = "Power"; ObjectID = "1wS-zW-gQa"; */
+"1wS-zW-gQa.title" = "功耗";
+
+/* Class = "NSMenuItem"; title = "AMD Power Gadget"; ObjectID = "1Xt-HY-uBw"; */
+"1Xt-HY-uBw.title" = "AMD Power Gadget";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "2g7-Ec-N8V"; */
+"2g7-Ec-N8V.title" = "Text Cell";
+
+/* Class = "NSMenu"; title = "Appearance"; ObjectID = "2QC-gb-0f6"; */
+"2QC-gb-0f6.title" = "外观";
+
+/* Class = "NSMenuItem"; title = "Enter Full Screen"; ObjectID = "4J7-dP-txa"; */
+"4J7-dP-txa.title" = "Enter Full Screen";
+
+/* Class = "NSMenuItem"; title = "Quit AMD Power Gadget"; ObjectID = "4sb-4s-VLi"; */
+"4sb-4s-VLi.title" = "Quit AMD Power Gadget";
+
+/* Class = "NSBox"; title = "Box"; ObjectID = "4We-9B-XwG"; */
+"4We-9B-XwG.title" = "Box";
+
+/* Class = "NSMenuItem"; title = "About AMD Power Gadget"; ObjectID = "5kV-Vb-QxS"; */
+"5kV-Vb-QxS.title" = "About AMD Power Gadget";
+
+/* Class = "NSButtonCell"; title = "Advanced Options"; ObjectID = "5sK-13-pcv"; */
+"5sK-13-pcv.title" = "高级选项";
+
+/* Class = "NSTextFieldCell"; title = "trulyspinach"; ObjectID = "5Us-8x-J9i"; */
+"5Us-8x-J9i.title" = "trulyspinach";
+
+/* Class = "NSTextFieldCell"; title = "Temperature"; ObjectID = "9dF-A1-1Jg"; */
+"9dF-A1-1Jg.title" = "温度";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "236-pQ-jhe"; */
+"236-pQ-jhe.title" = "Text Cell";
+
+/* Class = "NSBox"; title = "Box"; ObjectID = "afy-qs-3eT"; */
+"afy-qs-3eT.title" = "Box";
+
+/* Class = "NSTextFieldCell"; title = "When enabled, your processor speed will increase automatically on demand, and decrease after a short period of low activity.  Lower amount of energy will be consumed when processor running at a lower speed; AMDRyzenCPUPowerManagement will always optimize how your processor idle to save energy. This option is enabled by default since release version 0.6."; ObjectID = "AIb-f9-EZB"; */
+"AIb-f9-EZB.title" = "启用后，处理器频率会根据占用率自动提升，并在低负载持续一段时间后自动降低。处理器以较低频率运行时可降低能耗；AMDRyzenCPUPowerManagement 还会持续优化处理器的空闲方式以节省电能。 此选项自 0.6 版本起默认启用。";
+
+/* Class = "NSTableColumn"; headerCell.title = "IddDiv"; ObjectID = "aic-JQ-sWH"; */
+"aic-JQ-sWH.headerCell.title" = "IddDiv";
+
+/* Class = "NSBox"; title = "Box"; ObjectID = "Ar1-iz-6mE"; */
+"Ar1-iz-6mE.title" = "Box";
+
+/* Class = "NSMenuItem"; title = "Window"; ObjectID = "aUF-d1-5bR"; */
+"aUF-d1-5bR.title" = "Window";
+
+/* Class = "NSTableColumn"; headerCell.title = "CpuDfsId"; ObjectID = "Avj-ac-VkS"; */
+"Avj-ac-VkS.headerCell.title" = "CpuDfsId";
+
+/* Class = "NSMenu"; title = "Main Menu"; ObjectID = "AYu-sK-qS6"; */
+"AYu-sK-qS6.title" = "Main Menu";
+
+/* Class = "NSButtonCell"; title = "Export"; ObjectID = "bsR-em-SBO"; */
+"bsR-em-SBO.title" = "导出";
+
+/* Class = "NSButtonCell"; title = "Any Updates?"; ObjectID = "C6I-ax-otA"; */
+"C6I-ax-otA.title" = "检查更新？";
+
+/* Class = "NSButtonCell"; title = "Supported"; ObjectID = "CpO-Od-2Cx"; */
+"CpO-Od-2Cx.title" = "受支持";
+
+/* Class = "NSTabViewItem"; label = "Core Performance Boost"; ObjectID = "dAV-Wj-Bx0"; */
+"dAV-Wj-Bx0.label" = "Core Performance Boost";
+
+/* Class = "NSTextFieldCell"; title = "SMC Chip ID:, Revision: "; ObjectID = "dc4-aF-hyP"; */
+"dc4-aF-hyP.title" = "SMC 芯片 ID：，修订版本：";
+
+/* Class = "NSTextFieldCell"; title = "AMD Ryzen 9 3900X n-Core Processor"; ObjectID = "dkz-Wd-dhY"; */
+"dkz-Wd-dhY.title" = "AMD Ryzen 9 3900X n-Core Processor";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "DMm-c9-WEJ"; */
+"DMm-c9-WEJ.title" = "Text Cell";
+
+/* Class = "NSWindow"; title = "AMD Power Tool"; ObjectID = "E7w-tc-hlq"; */
+"E7w-tc-hlq.title" = "AMD Power Tool";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "ema-7h-kMg"; */
+"ema-7h-kMg.title" = "Text Cell";
+
+/* Class = "NSBox"; title = "Box"; ObjectID = "EY4-Jq-qBj"; */
+"EY4-Jq-qBj.title" = "Box";
+
+/* Class = "NSMenu"; title = "Help"; ObjectID = "F2S-fz-NVQ"; */
+"F2S-fz-NVQ.title" = "Help";
+
+/* Class = "NSButtonCell"; title = "Revert"; ObjectID = "Fdj-vc-YE4"; */
+"Fdj-vc-YE4.title" = "复原";
+
+/* Class = "NSTableColumn"; headerCell.title = "Speed"; ObjectID = "FFm-gh-Km5"; */
+"FFm-gh-Km5.headerCell.title" = "速度";
+
+/* Class = "NSMenuItem"; title = "Use Aqua Translucent"; ObjectID = "fV4-Ra-Fu1"; */
+"fV4-Ra-Fu1.title" = "使用 Aqua 半透明";
+
+/* Class = "NSButtonCell"; title = "Take Off"; ObjectID = "ggi-bj-js0"; */
+"ggi-bj-js0.title" = "全速";
+
+/* Class = "NSMenuItem"; title = "Show metrics in menu bar"; ObjectID = "goc-Nc-vnb"; */
+"goc-Nc-vnb.title" = "在菜单栏中显示指标";
+
+/* Class = "NSMenuItem"; title = "Open"; ObjectID = "H8h-7b-M4v"; */
+"H8h-7b-M4v.title" = "打开";
+
+/* Class = "NSTextFieldCell"; title = "Effective Frequency"; ObjectID = "Hb6-Sn-ZPE"; */
+"Hb6-Sn-ZPE.title" = "有效频率";
+
+/* Class = "NSMenuItem"; title = "Go to Project Page"; ObjectID = "HfB-vu-0Ij"; */
+"HfB-vu-0Ij.title" = "前往项目页面";
+
+/* Class = "NSSegmentedCell"; Hl0-LG-mDU.ibShadowedLabels[0] = "Overview"; ObjectID = "Hl0-LG-mDU"; */
+"Hl0-LG-mDU.ibShadowedLabels[0]" = "概览";
+
+/* Class = "NSSegmentedCell"; Hl0-LG-mDU.ibShadowedLabels[1] = "Speed"; ObjectID = "Hl0-LG-mDU"; */
+"Hl0-LG-mDU.ibShadowedLabels[1]" = "速度";
+
+/* Class = "NSSegmentedCell"; Hl0-LG-mDU.ibShadowedLabels[2] = "Core Performance Boost"; ObjectID = "Hl0-LG-mDU"; */
+"Hl0-LG-mDU.ibShadowedLabels[2]" = "Core Performance Boost";
+
+/* Class = "NSMenuItem"; title = "Item 2"; ObjectID = "Hn8-Ks-uXq"; */
+"Hn8-Ks-uXq.title" = "Item 2";
+
+/* Class = "NSMenu"; title = "Open"; ObjectID = "HyV-fh-RgO"; */
+"HyV-fh-RgO.title" = "打开";
+
+/* Class = "NSMenu"; title = "Services"; ObjectID = "hz9-B4-Xy5"; */
+"hz9-B4-Xy5.title" = "Services";
+
+/* Class = "NSWindow"; title = "AMD Power Gadget"; ObjectID = "IQv-IB-iLA"; */
+"IQv-IB-iLA.title" = "AMD Power Gadget";
+
+/* Class = "NSTextFieldCell"; title = "Designed and Engineered By:"; ObjectID = "j0C-AZ-HUC"; */
+"j0C-AZ-HUC.title" = "设计与实现：";
+
+/* Class = "NSMenuItem"; title = "Fastest"; ObjectID = "JPo-Oe-VZY"; */
+"JPo-Oe-VZY.title" = "最快";
+
+/* Class = "NSTabViewItem"; label = "Overview"; ObjectID = "jw8-ka-4WD"; */
+"jw8-ka-4WD.label" = "概览";
+
+/* Class = "NSMenuItem"; title = "Show All"; ObjectID = "Kd2-mp-pUS"; */
+"Kd2-mp-pUS.title" = "Show All";
+
+/* Class = "NSTextFieldCell"; title = "AMD Power Gadget"; ObjectID = "kgx-Yz-PbY"; */
+"kgx-Yz-PbY.title" = "AMD Power Gadget";
+
+/* Class = "NSMenuItem"; title = "Show Sidebar"; ObjectID = "kIP-vf-haE"; */
+"kIP-vf-haE.title" = "Show Sidebar";
+
+/* Class = "NSButtonCell"; title = "Automatic Speed Adjustment"; ObjectID = "Kze-iP-1gs"; */
+"Kze-iP-1gs.title" = "自动速度调节";
+
+/* Class = "NSMenuItem"; title = "Bring All to Front"; ObjectID = "LE2-aR-0XJ"; */
+"LE2-aR-0XJ.title" = "Bring All to Front";
+
+/* Class = "NSTableColumn"; headerCell.title = "ID"; ObjectID = "LTm-PH-kuq"; */
+"LTm-PH-kuq.headerCell.title" = "ID";
+
+/* Class = "NSTableColumn"; headerCell.title = "IddValue"; ObjectID = "Mca-Nw-Vfv"; */
+"Mca-Nw-Vfv.headerCell.title" = "IddValue";
+
+/* Class = "NSTextFieldCell"; title = "WARNING: Some systems allow complete control over SMC. Setting a fan to zero or speed to low can cause damage to your hardware."; ObjectID = "n4b-i7-1Bs"; */
+"n4b-i7-1Bs.title" = "警告：某些系统允许完全控制 SMC。将风扇转速设为零或过低可能会损坏硬件。";
+
+/* Class = "NSTableColumn"; headerCell.title = "CpuVid"; ObjectID = "n5s-2c-YmT"; */
+"n5s-2c-YmT.headerCell.title" = "CpuVid";
+
+/* Class = "NSMenuItem"; title = "Item 3"; ObjectID = "n9B-MP-DFG"; */
+"n9B-MP-DFG.title" = "Item 3";
+
+/* Class = "NSMenuItem"; title = "Services"; ObjectID = "NMo-om-nkz"; */
+"NMo-om-nkz.title" = "Services";
+
+/* Class = "NSTabViewItem"; label = "Speed"; ObjectID = "NXI-WX-40k"; */
+"NXI-WX-40k.label" = "速度";
+
+/* Class = "NSTableColumn"; headerCell.title = "CpuFid"; ObjectID = "nYa-2s-xXq"; */
+"nYa-2s-xXq.headerCell.title" = "CpuFid";
+
+/* Class = "NSTableColumn"; headerCell.title = "Fan"; ObjectID = "oIC-kO-sGy"; */
+"oIC-kO-sGy.headerCell.title" = "风扇";
+
+/* Class = "NSMenuItem"; title = "Hide AMD Power Gadget"; ObjectID = "Olw-nP-bQN"; */
+"Olw-nP-bQN.title" = "Hide AMD Power Gadget";
+
+/* Class = "NSMenuItem"; title = "Minimize"; ObjectID = "OY7-WF-poV"; */
+"OY7-WF-poV.title" = "Minimize";
+
+/* Class = "NSButtonCell"; title = "Apply"; ObjectID = "P6h-W0-BbD"; */
+"P6h-W0-BbD.title" = "应用";
+
+/* Class = "NSButtonCell"; title = "Enabled"; ObjectID = "PGN-R2-7eH"; */
+"PGN-R2-7eH.title" = "已启用";
+
+/* Class = "NSTextFieldCell"; title = "Avg: 3.56Ghz Max: 4.3Ghz Min: 2.0Ghz"; ObjectID = "Plb-DS-sdn"; */
+"Plb-DS-sdn.title" = "平均：3.56GHz，最大：4.3GHz，最小：2.0GHz";
+
+/* Class = "NSBox"; title = "Box"; ObjectID = "Plg-Z7-w4I"; */
+"Plg-Z7-w4I.title" = "Box";
+
+/* Class = "NSTextFieldCell"; title = "5.463K"; ObjectID = "pNU-5v-eWS"; */
+"pNU-5v-eWS.title" = "5.463K";
+
+/* Class = "NSTextFieldCell"; title = "Demand"; ObjectID = "pqc-63-Avp"; */
+"pqc-63-Avp.title" = "占用率";
+
+/* Class = "NSTextFieldCell"; title = "Inst(s) Retired:"; ObjectID = "qdI-Ya-6dw"; */
+"qdI-Ya-6dw.title" = "已退役指令：";
+
+/* Class = "NSButtonCell"; title = "Auto"; ObjectID = "QPE-ab-91M"; */
+"QPE-ab-91M.title" = "自动";
+
+/* Class = "NSTextFieldCell"; title = "Frequency"; ObjectID = "qRd-tk-FyD"; */
+"qRd-tk-FyD.title" = "频率";
+
+/* Class = "NSMenuItem"; title = "Zoom"; ObjectID = "R4o-n2-Eq4"; */
+"R4o-n2-Eq4.title" = "Zoom";
+
+/* Class = "NSTextFieldCell"; title = "AMD Power Tool"; ObjectID = "rfE-lF-RW1"; */
+"rfE-lF-RW1.title" = "AMD Power Tool";
+
+/* Class = "NSButtonCell"; title = "Fan Control"; ObjectID = "rzA-U2-cjG"; */
+"rzA-U2-cjG.title" = "风扇控制";
+
+/* Class = "NSTextFieldCell"; title = "Frequency Max:"; ObjectID = "S67-kA-60W"; */
+"S67-kA-60W.title" = "最大频率：";
+
+/* Class = "NSTextFieldCell"; title = "Avg: 3.56Ghz Max: 4.3Ghz Min: 2.0Ghz"; ObjectID = "SDV-46-714"; */
+"SDV-46-714.title" = "平均：3.56GHz，最大：4.3GHz，最小：2.0GHz";
+
+/* Class = "NSMenuItem"; title = "AMD Power Gadget"; ObjectID = "snW-S8-Cw5"; */
+"snW-S8-Cw5.title" = "AMD Power Gadget";
+
+/* Class = "NSMenu"; title = "Window"; ObjectID = "Td7-aD-5lo"; */
+"Td7-aD-5lo.title" = "Window";
+
+/* Class = "NSTextFieldCell"; title = "30 C"; ObjectID = "tmg-PQ-zZy"; */
+"tmg-PQ-zZy.title" = "30 °C";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "UfV-EQ-Oip"; */
+"UfV-EQ-Oip.title" = "Text Cell";
+
+/* Class = "NSTableColumn"; headerCell.title = "Override"; ObjectID = "UGH-lF-HM6"; */
+"UGH-lF-HM6.headerCell.title" = "覆盖";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "UGy-gD-sne"; */
+"UGy-gD-sne.title" = "Text Cell";
+
+/* Class = "NSMenuItem"; title = "Launch in menu bar at login"; ObjectID = "UJh-jc-2fi"; */
+"UJh-jc-2fi.title" = "登录时在菜单栏中启动";
+
+/* Class = "NSTextFieldCell"; title = "Allow automatically shifting down to a low power state, which may introduce performance issue. This option is disabled by default and last until a reboot."; ObjectID = "uqh-lv-7ht"; */
+"uqh-lv-7ht.title" = "允许自动降速到低功耗状态，可能会带来性能问题。 此选项默认禁用，并持续到重新启动。";
+
+/* Class = "NSMenu"; title = "AMD Power Gadget"; ObjectID = "uQy-DD-JDr"; */
+"uQy-DD-JDr.title" = "AMD Power Gadget";
+
+/* Class = "NSButtonCell"; title = "Close"; ObjectID = "UtR-j6-h3D"; */
+"UtR-j6-h3D.title" = "关闭";
+
+/* Class = "NSMenuItem"; title = "Hide Others"; ObjectID = "Vdr-fp-XzO"; */
+"Vdr-fp-XzO.title" = "Hide Others";
+
+/* Class = "NSMenuItem"; title = "SMC Fans"; ObjectID = "W4w-Lk-RxU"; */
+"W4w-Lk-RxU.title" = "SMC 风扇";
+
+/* Class = "NSMenuItem"; title = "Help"; ObjectID = "wpr-3q-Mcd"; */
+"wpr-3q-Mcd.title" = "Help";
+
+/* Class = "NSButtonCell"; title = "Fix 'Unknown' motherboard display"; ObjectID = "xeA-Lk-bKK"; */
+"xeA-Lk-bKK.title" = "修复“Unknown”主板显示";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "Xv1-kW-pEb"; */
+"Xv1-kW-pEb.title" = "Text Cell";
+
+/* Class = "NSTextFieldCell"; title = "Drag the slider to override speed."; ObjectID = "xvA-Z9-iMz"; */
+"xvA-Z9-iMz.title" = "拖动滑块以覆盖转速。";
+
+/* Class = "NSMenuItem"; title = "Appearance"; ObjectID = "YPP-op-718"; */
+"YPP-op-718.title" = "外观";
+
+/* Class = "NSTextFieldCell"; title = "Text Cell"; ObjectID = "YQQ-E3-R2G"; */
+"YQQ-E3-R2G.title" = "Text Cell";
+
+/* Class = "NSTableColumn"; headerCell.title = "Enabled"; ObjectID = "yxu-c2-nct"; */
+"yxu-c2-nct.headerCell.title" = "已启用";
+
+/* Class = "NSButtonCell"; title = "Import"; ObjectID = "zct-1P-oFp"; */
+"zct-1P-oFp.title" = "导入";
+
+/* Class = "NSTableColumn"; headerCell.title = "Throttle"; ObjectID = "zoC-w0-w5s"; */
+"zoC-w0-w5s.headerCell.title" = "转速";
+
+/* Class = "NSButtonCell"; title = "Enable Low Power State"; ObjectID = "zPp-Te-Sg9"; */
+"zPp-Te-Sg9.title" = "启用低功耗状态";
+
+/* Class = "NSTextFieldCell"; title = "Speed Steps"; ObjectID = "Zye-Ux-TbU"; */
+"Zye-Ux-TbU.title" = "速度档位";
+

@@ -1,0 +1,140 @@
+/* Average core frequency shown in the menu bar
+Maximum core frequency shown in the menu bar
+Maximum core frequency shown in the power tool */
+"%.1f GHz" = "%.1f GHz";
+
+/* Temperature reading */
+"%.2f °C" = "%.2f °C";
+
+/* Power consumption reading */
+"%.2f Watt" = "%.2f 瓦";
+
+/* System information overview shown in the power tool */
+"%@\nFamily: %02Xh, Model: %02Xh\nPhysical: %d, Logical: %d\nL1(Total): %d KB, L2(Total): %d MB, L3(Shared): %d MB\n\nMotherboard: %@\n%@\nGraphics: %@\nMemory: %dGB, Storage: %@GB\n\nmacOS Version: %@\nAMDRyzenCPUPowerManagement:\n  Version: %@, CPU Supported: %@" = "%@\nFamily：%02Xh，Model：%02Xh\n物理核心：%d，逻辑核心：%d\nL1（总计）：%d KB，L2（总计）：%d MB，L3（共享）：%d MB\n\n主板：%@\n%@\n显卡：%@\n内存：%dGB，存储：%@GB\n\nmacOS 版本：%@\nAMDRyzenCPUPowerManagement:\n  版本：%@，CPU 受支持：%@";
+
+/* Frequency of a speed step option */
+"%dMHz" = "%dMHz";
+
+/* Alert message shown when applying P-State settings fails */
+"Action was denied as current user does not have enough privilege,\nor was canceled by current user.\n\n\nRun AMD Power Gadget as root user or disable privilege check with boot-arg '-amdpnopchk'\n\nOtherwise, click 'Once' in the warning message to allow this change." = "操作被拒绝：当前用户权限不足，或被当前用户取消。\n\n请以 root 用户运行 AMD Power Gadget，或使用引导参数 '-amdpnopchk' 禁用权限检查。\n\n否则，请在警告信息中点击“Once”以允许此次更改。";
+
+/* Status bar menu item opening the power gadget window */
+"AMD Power Gadget" = "AMD Power Gadget";
+
+/* Status bar menu item opening the power tool window */
+"AMD Power Tool" = "AMD Power Tool";
+
+/* Alert title shown when the AMDRyzenCPUPowerManagement driver is not loaded */
+"AMDRyzenCPUPowerManagement Not Found" = "未找到 AMDRyzenCPUPowerManagement";
+
+/* Alert title shown when the loaded driver version is too old */
+"AMDRyzenCPUPowerManagement Version Incompatible" = "AMDRyzenCPUPowerManagement 版本不兼容";
+
+/* Average and maximum core frequency summary */
+"Average of %d Cores: %.2f GHz, Max: %.2f GHz" = "%d 个核心的平均值：%.2f GHz，最大：%.2f GHz";
+
+/* Button title to cancel closing the window */
+"Cancel" = "取消";
+
+/* SMC chip identifier, revision and driver connection status */
+"Chip ID: %X, Revision: %X, %@" = "芯片 ID：%X，修订版本：%X，%@";
+
+/* Alert message shown when closing the P-State editor with unsaved changes */
+"Click apply to save changes before closing this windows." = "请在关闭此窗口前点击“应用”以保存更改。";
+
+/* Button title to close the window discarding changes */
+"Close without saving" = "不保存并关闭";
+
+/* SMC driver connection status: connected */
+"Connected" = "已连接";
+
+/* Alert title shown when the SMC chip is not supported */
+"Could not found driver for your SMC." = "未找到适用于你的 SMC 的驱动。";
+
+/* Message of the alert asking whether to start the app at login */
+"Do you want AMD Power Gadget to start in menu bar at login? \n\n This will only be asked once. You can change this setting later under Appearance menu." = "你希望 AMD Power Gadget 在登录时于菜单栏中启动吗？\n\n此提示仅会询问一次。之后可在外观菜单中更改此设置。";
+
+/* Button title to close the alert */
+"Done" = "完成";
+
+/* Button title to open the download page */
+"Download" = "下载";
+
+/* Alert title shown when the driver reports incorrect CPU data */
+"Error reading CPU data." = "读取 CPU 数据出错。";
+
+/* Status bar menu item quitting the application */
+"Exit" = "退出";
+
+/* Alert title shown when a non-hexadecimal value is entered */
+"Invaild Input" = "无效输入";
+
+/* Alert title shown when a newer driver version exists */
+"Kext Update Available" = "有可用 Kext 更新";
+
+/* Button title to dismiss the update alert */
+"Later" = "稍后";
+
+/* Button title to decline starting the app at login */
+"No" = "否";
+
+/* CPU support status: not yet supported */
+"Not yet :)" = "尚不支持 :)";
+
+/* SMC driver connection status: not yet supported */
+"Not yet supported" = "尚不支持";
+
+/* Instructions for exposing motherboard information in OpenCore */
+"Open your OpenCore config file,\n\nGo to Misc -> Security -> ExposeSensitiveData,\n\nSet the value to 0x08 to expose board information." = "打开你的 OpenCore 配置文件，\n\n前往 Misc -> Security -> ExposeSensitiveData，\n\n将值设置为 0x08 以公开主板信息。";
+
+/* Alert message shown when the AMDRyzenCPUPowerManagement driver is not loaded */
+"Please download AMDRyzenCPUPowerManagement from the release page." = "请从发布页面下载 AMDRyzenCPUPowerManagement。";
+
+/* Alert message shown when a non-hexadecimal value is entered */
+"Please type in numbers in hexadecimal." = "请输入十六进制数字。";
+
+/* Button title to quit the application */
+"Quit" = "退出";
+
+/* Button title to quit the application and open the download page */
+"Quit and Download" = "退出并下载";
+
+/* Button title to open the issue tracker */
+"Report Issue" = "报告问题";
+
+/* Status bar menu item opening the fan control window */
+"SMC Fans" = "SMC 风扇";
+
+/* Title of the alert asking whether to start the app at login */
+"Startup at login?" = "登录时启动？";
+
+/* Alert message shown when a newer driver version exists */
+"There are updates available for AMDRyzenCPUPowerManagement. Update to the latest version for more feature and stability." = "AMDRyzenCPUPowerManagement 有可用更新。请更新到最新版本，以获得更佳的功能与稳定性。";
+
+/* Alert message shown when the driver reports incorrect CPU data */
+"This application can not be launched due to AMDRyzenCPUPowerManagement is reporting incorrect data." = "由于 AMDRyzenCPUPowerManagement 报告的数据不正确，本应用程序无法启动。";
+
+/* Title of the help alert for showing motherboard information */
+"To enable motherboard display:" = "要启用主板显示：";
+
+/* Alert title shown when applying P-State settings fails */
+"Unable to Set PStateDef" = "无法设置 PStateDef";
+
+/* Placeholder shown when the GPU model is not available
+Placeholder shown when the motherboard name is not available
+Placeholder shown when the motherboard vendor is not available */
+"Unknown" = "未知";
+
+/* Button title to enable starting the app at login
+CPU support status: supported */
+"Yes" = "是";
+
+/* Alert message shown when the loaded driver version is too old */
+"Your AMDRyzenCPUPowerManagement version is %@, which is outdated and no longer API compatible. Please use the latest version and start this application again." = "你的 AMDRyzenCPUPowerManagement 版本为 %@，版本过旧且不再兼容 API。请使用最新版本并重新启动本应用程序。";
+
+/* Alert title shown when closing the P-State editor with unsaved changes */
+"Your changes will not be saved" = "你的更改将不会被保存";
+
+/* Alert message shown when the SMC chip is not supported */
+"Your SMC chip is likely not supported yet." = "你的 SMC 芯片可能尚不受支持。";
+

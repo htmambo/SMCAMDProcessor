@@ -1269,7 +1269,7 @@
                                                                                     <autoresizingMask key="autoresizingMask"/>
                                                                                     <textFieldCell key="cell" selectable="YES" alignment="left" id="g3v-Pl-VUX">
                                                                                         <font key="font" metaFont="systemMedium" size="13"/>
-                                                                                        <string key="title">Family: 12 ddd  deded dedededed dede de d ed ed e de dede d ded dccsvgbg  ijk  ij j jn jk iohiuohg yg uygb b jnmkl;m iohj uigbh uiojhn iujnhih </string>
+                                                                                        <string key="title"></string>
                                                                                         <color key="textColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                                                                         <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                                                                     </textFieldCell>
