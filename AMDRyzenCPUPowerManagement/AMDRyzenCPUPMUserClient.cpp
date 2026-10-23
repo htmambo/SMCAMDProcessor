@@ -314,7 +314,10 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
             if(!fProvider->cpbSupported)
                 return kIOReturnNoDevice;
             
-            fProvider->setCPBState(arguments->scalarInput[0]==1?true:false);
+            // Report the failure back to the client instead of silently
+            // pretending the change went through.
+            if(!fProvider->setCPBState(arguments->scalarInput[0]==1?true:false))
+                return kIOReturnError;
             
             break;
         }

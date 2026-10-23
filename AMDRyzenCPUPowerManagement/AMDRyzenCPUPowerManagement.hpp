@@ -159,7 +159,7 @@ public:
     void applyPowerControl(uint8_t pstate);
     uint8_t getPowerControl();
     
-    void setCPBState(bool enabled);
+    bool setCPBState(bool enabled);
     bool getCPBState();
     
 #define HF_TEMP_SAMPLE_SECS 3
@@ -175,8 +175,9 @@ public:
     
     void registerRequest();
     
-    void dumpPstate(uint64_t buf[8]);
+    bool dumpPstate(uint64_t buf[8], bool allowLog = true);
     void writePstate(const uint64_t *buf);
+    void restoreWakeState();
     
     bool initSuperIO(uint16_t* chipIntel);
     
@@ -224,9 +225,30 @@ public:
     
     uint8_t PStateCur_perCore[CPUInfo::MaxCpus];
     uint8_t PStateCtl = 0;
-    uint64_t PStateDef_perCore[8];
-    float PStateDefClock_perCore[8];
+    // Zero-initialized: the wake path snapshots/restores these caches without
+    // re-reading the MSRs, so an untouched slot must read as "no definition"
+    // (0 fails the fid/dfsId validity check) rather than as kalloc garbage.
+    uint64_t PStateDef_perCore[8] {};
+    float PStateDefClock_perCore[8] {};
     bool cpbSupported;
+
+    // Per-CPU flag: the HWCR init (setting bit 30) failed on this CPU and has
+    // to be retried. Each CPU only touches its own slot, so no cross-CPU race.
+    bool hwcrInitPending[CPUInfo::MaxCpus] {};
+
+    // Set when the cached P-state table could not be (re)read; the work loop
+    // retry tick re-runs dumpPstate() on the master CPU until it succeeds.
+    bool pstateDumpPending {};
+
+    // Bounded retry budget for the pstateDumpPending re-dump: every rdmsr
+    // takes cpu_lock inside the rendezvous barrier, so a permanently
+    // unreadable P-state MSR must not retry every tick forever. Refilled on
+    // each wake re-init and on every explicit user writePstate().
+    uint8_t pstateDumpRetryLeft { 20 };
+
+    // Set once lastAPERF/lastMPERF hold a real sample, so a failed boot-time
+    // seed does not yield one frequency sample scaled from cumulative counters.
+    bool freqCountersSeeded[CPUInfo::MaxCpus] {};
     
     
     uint64_t lastUpdateTime;
