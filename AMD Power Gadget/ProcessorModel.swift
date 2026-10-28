@@ -51,7 +51,16 @@ class ProcessorModel {
 
     /// Newest kext version this app was built and tested against.
     /// Only used to tell the user that a newer kext is available.
-    private static let latestKnownVersion = "0.7.5"
+    /// Injected at build time from the AMDRYZEN_KEXT_VERSION build setting so that
+    /// bumping the kext version does not require editing this file.
+    private static let latestKnownVersion: String = {
+        if let injected = Bundle.main.object(
+            forInfoDictionaryKey: "LatestKnownAMDRyzenCPUPowerManagementVersion") as? String,
+            !injected.isEmpty {
+            return injected
+        }
+        return "0.7.5"
+    }()
 
     private static func versionComponents(_ version : String) -> [Int] {
         version.split(separator: ".").map { Int($0) ?? 0 }
