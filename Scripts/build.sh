@@ -122,6 +122,24 @@ PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
 LOG_FILE="$ROOT/build/build.log"
 
 # ---------------------------------------------------------------- 依赖准备 --
+# 本地布局:预编译依赖可能放在仓库外的 ../sdk 下(Lilu.kext / VirtualSMC.kext,
+# 见 .gitignore)。Xcode 的 HEADER_SEARCH_PATHS 指向仓库内的 Lilu.kext /
+# VirtualSMC.kext,所以这里在仓库内建立软链,避免为了"凑齐依赖"而联网下载。
+# CI 没有 ../sdk,行为与之前完全一致。
+link_local_sdk_dep() {
+    local name="$1" target="../sdk/$1"
+    [ -e "$ROOT/$target" ] || return 0
+    if [ -e "$ROOT/$name" ]; then
+        return 0
+    fi
+    # 断链软链(目标被删)必须先删掉,否则下面的检查会当成"已就绪",
+    # 却又因文件不可达而回到联网下载分支。
+    if [ -L "$ROOT/$name" ]; then
+        rm -f "$ROOT/$name"
+    fi
+    ln -s "$target" "$ROOT/$name" && log "已建立软链 $name -> $target"
+}
+
 prepare_mackernel_sdk() {
     if [ -f "$ROOT/MacKernelSDK/Library/universal/libkmod.a" ]; then
         log "MacKernelSDK 已就绪"
@@ -133,8 +151,18 @@ prepare_mackernel_sdk() {
 }
 
 prepare_virtual_smc() {
+    # 两种满足方式:
+    #   a) 源码克隆布局(仓库根下的 VirtualSMC/)—— CI 用这个
+    #   b) 预编译 kext 布局(VirtualSMC.kext/Contents/Resources/VirtualSMCSDK)
+    #      —— 本地布局用这个。kext 编译只需要 b:Xcode 的 HEADER_SEARCH_PATHS
+    #      指向 ${PROJECT_DIR}/VirtualSMC.kext/Contents/Resources,
+    #      ${PROJECT_DIR}/VirtualSMC 只是冗余搜索路径,目录不存在不影响编译。
     if [ -f "$ROOT/VirtualSMC/VirtualSMCSDK/kern_vsmcapi.hpp" ]; then
-        log "VirtualSMC 已就绪"
+        log "VirtualSMC 已就绪(源码布局)"
+        return 0
+    fi
+    if [ -f "$ROOT/VirtualSMC.kext/Contents/Resources/VirtualSMCSDK/kern_vsmcapi.hpp" ]; then
+        log "VirtualSMC 已就绪(预编译 kext 布局)"
         return 0
     fi
     log "克隆 VirtualSMC (ref: $VSMC_REF)"
@@ -173,7 +201,13 @@ prepare_lilu() {
     unzip -q "$tmp/lilu.zip" -d "$tmp" || { rm -rf "$tmp"; die "Lilu 压缩包解压失败"; }
     [ -d "$tmp/Lilu.kext" ] || { rm -rf "$tmp"; die "Lilu 压缩包中未找到 Lilu.kext"; }
 
-    rm -rf "$ROOT/Lilu.kext"
+    # 若 Lilu.kext 是指向仓库外依赖的软链,只删软链本身 ——
+    # rm -rf 虽不会跟随软链,但这里显式区分,避免误删 ../sdk/Lilu.kext。
+    if [ -L "$ROOT/Lilu.kext" ]; then
+        rm -f "$ROOT/Lilu.kext"
+    else
+        rm -rf "$ROOT/Lilu.kext"
+    fi
     mv "$tmp/Lilu.kext" "$ROOT/Lilu.kext"
     rm -rf "$tmp"
     [ -f "$ROOT/Lilu.kext/Contents/Resources/Headers/kern_api.hpp" ] \
@@ -183,6 +217,10 @@ prepare_lilu() {
 if [ "$SKIP_DEPS" -eq 1 ]; then
     warn "已跳过依赖准备"
 else
+    # 本地布局:仓库外 ../sdk 下已有预编译依赖时,先建立仓库内软链,
+    # 后面的检查就会命中,不需要联网下载。
+    link_local_sdk_dep Lilu.kext
+    link_local_sdk_dep VirtualSMC.kext
     prepare_mackernel_sdk
     prepare_lilu
     prepare_virtual_smc
