@@ -56,9 +56,18 @@ extern uint32_t pmRyzen_hpcpus;
 extern uint32_t pmRyzen_pstatelimit;
 
 
-extern void pmRyzen_wrmsr_safe(void *, uint32_t, uint64_t);
+// 0.7.6 (T8 / O26): pmRyzen_wrmsr_safe 改为返回 int（1 = 写成功，0 = 失败），
+// 让调用方能检测写入失败。返回类型用 int 而不是 bool —— C 的 _Bool 与
+// C++ 的 bool 在跨语言声明下不是同一个类型，extern "C" 链接时用 int 才
+// 没有 ABI 歧义。
+extern int pmRyzen_wrmsr_safe(void *, uint32_t, uint64_t);
 extern uint64_t pmRyzen_rdmsr_safe(void *, uint32_t);
 extern pmRyzen_symtable_t pmRyzen_symtable;
+
+// 0.7.6 (T8 / O26): -amdpdbg 调试开关在 PM 侧的镜像。
+// PM 侧（C 文件）拿不到 provider 的 ADDPR(debugEnabled)，由 provider 在
+// start() 里同步过来。PM 侧的日志一律只在它打开时输出。
+extern int pmRyzen_debug_enabled;
 
 
 typedef struct pmProcessor{

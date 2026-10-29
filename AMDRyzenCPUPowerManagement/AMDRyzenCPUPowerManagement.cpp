@@ -35,8 +35,11 @@ static constexpr uint8_t PMRYZEN_HWCR_RETRY_BUDGET = 20;
 
 
 extern "C"{
-void pmRyzen_wrmsr_safe(void *handle, uint32_t addr, uint64_t value){
-    static_cast<AMDRyzenCPUPowerManagement*>(handle)->write_msr(addr, value);
+// 0.7.6 (T8 / O26): 返回 1 = 写成功，0 = 失败。
+// 返回类型是 int 而不是 bool —— 头文件是 C 可见的，C 的 _Bool 与 C++ 的
+// bool 不是同一个类型，extern "C" 链接下用 int 才没有 ABI 歧义。
+int pmRyzen_wrmsr_safe(void *handle, uint32_t addr, uint64_t value){
+    return static_cast<AMDRyzenCPUPowerManagement*>(handle)->write_msr(addr, value) ? 1 : 0;
 }
 
 uint64_t pmRyzen_rdmsr_safe(void *handle, uint32_t addr){
@@ -352,6 +355,14 @@ void AMDRyzenCPUPowerManagement::initWorkLoop() {
     
     lastUpdateTime = getCurrentTimeNs();
     pwrLastTSC = rdtsc64();
+    // 0.7.6 (T8 / Round 4 M1): 播种能量基线。
+    // lastUpdateEnergyValue 此前从未被播种 ⇒ 第一次采样时 delta = 整个
+    // RAPL 计数器（自 boot 起累积），而分母只有 ~50 ms ⇒ 开机后第一个功率
+    // 读数是数千瓦量级的假尖峰。这个尖峰会直接出现在 -amdpdbg 的双值
+    // 对照日志的第一行里（污染 Q1 计划的那一周对照），也会被 App 与
+    // VirtualSMC 读到一个采样周期。
+    // 复用 O24 已经引入的机制：第一次采样只建基线、不产出读数。
+    pwrNeedRebaseline = true;
     workLoop->addEventSource(timerEvent_main);
     workLoop->addEventSource(timerEvent_tempe);
     timerEvent_main->setTimeoutMS(1);
@@ -511,12 +522,22 @@ bool AMDRyzenCPUPowerManagement::start(IOService *provider){
     // 0.7.6: _tscFreq 是一个指向内核变量的指针。符号缺失时直接解引用
     // 会在启动阶段把内核带崩（start() 里的空指针解引用）。
     // 现在缺失时保留默认值并关闭依赖它的包级功率测量。
+    // 0.7.6 (Round 4 M5): **符号存在不等于值有效** —— xnuTSCFreq == 0 时
+    // updatePackageEnergy() 里的 seconds 会是 +inf，除出来是 0 W（静默失真）。
+    // 值无效就当作"频率不可用"。
     if(pmRyzen_symtable._tscFreq){
         xnuTSCFreq = *((uint64_t*)pmRyzen_symtable._tscFreq);
-        tscFreqValid = true;
+        tscFreqValid = (xnuTSCFreq > 0);
+        if(!tscFreqValid)
+            IOLog("AMDCPUSupport::start WARN: _tscFreq is 0, package power measurement disabled\n");
     } else {
         IOLog("AMDCPUSupport::start WARN: Can't find _tscFreq, package power measurement disabled\n");
     }
+
+    // 0.7.6 (T8 / O26): 把 -amdpdbg 开关同步到 PM 侧（C 文件拿不到
+    // provider 的 ADDPR(debugEnabled)）。必须在 pmRyzen_init() 之前 ——
+    // 开机改写固件 P1 定义的日志要用它门控。
+    pmRyzen_debug_enabled = ADDPR(debugEnabled) ? 1 : 0;
 
     // 0.7.6: pmRyzen_init() 失败（PM 相关符号缺失）时不能继续发布服务：
     // 带着 0 个物理核发布出去，用户态的 logical/physical 除法会直接
@@ -642,6 +663,17 @@ IOReturn AMDRyzenCPUPowerManagement::setPowerState(unsigned long powerStateOrdin
         // Waking up — see sleep branch above for the no-IOLog rationale.
         sleepState.sleep = false;
         restoreWakeState();
+        // 0.7.6 (T8 / O24): 置"需要重建能量基线"标志。
+        // S3 之后 RAPL 计数器可能从 0 重新开始，唤醒后与睡眠前的基线相减
+        // 会得到巨大 delta ⇒ 第一个功率读数出现巨大尖峰。
+        //
+        // 0.7.6 (Round 4 M3): 置位点放在**唤醒**分支而不是睡眠分支 ——
+        // 此刻工作循环仍是 disabled 的，不可能有 tick 抢先消费掉这个标志。
+        // 放在睡眠分支时，工作循环线程若正好在 updatePackageEnergy() 里，
+        // PM 线程写入的 true 会被它清成 false ⇒ 标志丢失 ⇒ 尖峰照旧出现
+        // （窗口 ~µs / tick 50~1200 ms，概率约 1e-6/次睡眠，但后果正是
+        // O24 要消除的症状）。
+        pwrNeedRebaseline = true;
         resumeWorkLoop();
     }
 
@@ -948,18 +980,73 @@ void AMDRyzenCPUPowerManagement::updatePackageEnergy(){
     uint64_t ctsc = rdtsc64();
 
     uint64_t msr_value_buf = 0;
-    read_msr(kMSR_PKG_ENERGY_STAT, &msr_value_buf);
+    // 0.7.6 (T8 / O12): 检查 read_msr() 的返回值。
+    // 以前失败时 msr_value_buf 保持 0 ⇒ energyValue = 0 ⇒ 走回绕分支 ⇒
+    // delta 变成天文数字 ⇒ 功率读数出现巨大假尖峰（而且基线被写成 0，
+    // 下一次再读又是一次尖峰）。
+    // 失败就跳过本次采样：保留上一次的 uniPackageEnergy，也不动基线。
+    if(!read_msr(kMSR_PKG_ENERGY_STAT, &msr_value_buf)){
+        if(ADDPR(debugEnabled))
+            IOLog("AMDCPUSupport::updatePackageEnergy: failed to read RAPL energy, sample skipped\n");
+        return;
+    }
 
     uint32_t energyValue = (uint32_t)(msr_value_buf & 0xffffffff);
 
-    uint64_t energyDelta = (lastUpdateEnergyValue <= energyValue) ?
-    energyValue - lastUpdateEnergyValue : UINT32_MAX - lastUpdateEnergyValue;
+    // 0.7.6 (T8 / O24): 睡眠/唤醒后重建基线。
+    // S3 之后 RAPL 计数器可能从 0 重新开始，此时与睡眠前的基线相减会得到
+    // 一个巨大的 delta。重建基线的那一次采样不产出功率值（保留上一次的读数），
+    // 只把基线对齐到当前值。
+    if(pwrNeedRebaseline){
+        pwrNeedRebaseline = false;
+        lastUpdateEnergyValue = energyValue;
+        pwrLastTSC = ctsc;
+        if(ADDPR(debugEnabled))
+            IOLog("AMDCPUSupport::updatePackageEnergy: energy baseline re-established after sleep\n");
+        return;
+    }
+
+    // 0.7.6 (T8 / O12): 32 位计数器回绕用无符号自然回绕。
+    // 原来的写法 `UINT32_MAX - lastUpdateEnergyValue` 在真正回绕时
+    // 丢掉了 `1 + energyValue` 这一段。
+    uint32_t energyDelta = (uint32_t)(energyValue - lastUpdateEnergyValue);
 
     double seconds = (ctsc - pwrLastTSC) / (double)(xnuTSCFreq);
-    double e = (pwrEnergyUnit * energyDelta) / (seconds);
-    e *= pwrTimeUnit * 1000;
-    uniPackageEnergy = e;
+    // 0.7.6 (T8 / O24): 零除保护 —— TSC 没前进（两次采样间隔极短）时
+    // seconds 会是 0，除出来是 +inf，对外就是一个无意义的值。
+    // xnuTSCFreq == 0 的情形由 start() 里的 tscFreqValid 一并挡掉
+    // （符号存在不等于值有效，见 Round 4 M5）。
+    if(seconds <= 0.0) return;
 
+    // 0.7.6 (T8 / O12): 修正后的换算，对齐 LHM 的 Amd17Cpu.cs：
+    //     功率(W) = ΔESU × 2^-ESU(J) / Δ秒
+    // 不含 pwrTimeUnit —— TU（时间粒度 2^-TU 秒）只有在用 RAPL 自己的
+    // 时间戳时才有意义，这里的时间来自 TSC，与 TU 无关。
+    double eCorrected = (pwrEnergyUnit * (double)energyDelta) / seconds;
+
+    // 0.7.6 (T8 / O12): 旧公式额外乘了 `pwrTimeUnit * 1000` ——
+    // 无量纲依据的因子（LHM 参考实现里没有），是当前功率读数系统性偏低的
+    // 原因。按 Q1 的决策 (b)，**对外仍然给旧值**：修正值只在这里并排算出来，
+    // 在 -amdpdbg 下双值对照一周，确认无误后再用单独一次提交切换对外值。
+    //
+    // 括号位置与旧代码严格一致（`e *= pwrTimeUnit * 1000`）：
+    // 浮点乘法不结合，(e * pwrTimeUnit) * 1000 与 e * (pwrTimeUnit * 1000)
+    // 的末位可能不同 —— 对外值必须与 0.7.5 逐位相同才好做对照。
+    double eLegacy = eCorrected * (pwrTimeUnit * 1000.0);
+
+    uniPackageEnergy = eLegacy;
+
+    // 0.7.6 (T8 / O12, Q1=b): 双值对照日志（-amdpdbg，每 30 s 一次）。
+    if(ADDPR(debugEnabled)){
+        uint64_t nowNs = getCurrentTimeNs();
+        if(nowNs - lastPowerDiagNs > 30ULL * 1000000000ULL){
+            lastPowerDiagNs = nowNs;
+            IOLog("AMDCPUSupport::updatePackageEnergy: legacy %.3f W | corrected %.3f W "
+                  "(delta %+.3f W, ratio %.4f)\n",
+                  eLegacy, eCorrected, eCorrected - eLegacy,
+                  eLegacy != 0.0 ? eCorrected / eLegacy : 0.0);
+        }
+    }
 
     lastUpdateEnergyValue = energyValue;
     pwrLastTSC = rdtsc64();

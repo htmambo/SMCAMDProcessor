@@ -35,6 +35,10 @@ void(*pmRyzen_cpu_NMI)(int) = 0;
 void(*pmRyzen_NMI_enabled)(boolean_t) = 0;
 void(*pmRyzen_cpu_IPI)(int) = 0;
 
+// 0.7.6 (T8 / O26): -amdpdbg 调试开关在 PM 侧的镜像。
+// provider 在 start() 里同步过来；PM 侧（C 文件）的日志只在它打开时输出。
+int pmRyzen_debug_enabled = 0;
+
 
 //kern_return_t       (*pmCPUStateInit)(void);
 //void                (*cstateInit)(void);
@@ -110,17 +114,21 @@ void pmRyzen_init_PState(){
     // 分母为 0 时直接 #DE ⇒ 内核 panic（发生在 start 路径上）。
     // 分母为 0 的两个来源：pmRyzen_rdmsr_safe() 读失败返回 0；DfsId 字段本身为 0。
     // 读不到有效值就放弃改写固件（降级，不是崩溃）。
-    // 注：DfsId 的正确掩码是 bits 13:8（6 位 0x3f），整式修正属 O13，随 T8 一并做。
-    uint64_t p0dfs = (p0 >> 8) & 0x1f;
-    if(p0dfs == 0) return;
+    //
+    // 0.7.6 (T8 / O13): DfsId 是 bits 13:8（**6 位**），掩码从 0x1f 改成 0x3f，
+    // 与全仓其它地方（cpp 的 dumpPstate()）保持一致 —— 原来的 0x1f 会把
+    // bit 13 截掉，DfsId ≥ 0x20 时推出的 P0 频率（进而 P1 FID）是错的。
+    uint64_t p0fid = p0 & 0xff;
+    uint64_t p0dfs = (p0 >> 8) & 0x3f;
+    if(p0dfs == 0 || p0fid == 0) return;
     
     // 0.7.6 (Round 3 M3): 改成浮点除法 —— 原来的整数除法会截断小数部分，
     // 推出来的 P0 频率（进而 P1 FID）是错的。公式与 cpp 侧 dumpPstate() 一致：
     // clock = Fid / DfsId * 200。
-    float p0spd = (float)(p0 & 0xff) / (float)p0dfs * 200.0F;
+    float p0spd = (float)p0fid / (float)p0dfs * 200.0F;
     
     uint64_t p1 = pmRyzen_rdmsr_safe(pmRyzen_io_service_handle, MSR_PSTATE_0 + 1);
-    uint64_t p1dfs = (p1 >> 8) & 0x1f;
+    uint64_t p1dfs = (p1 >> 8) & 0x3f;
     // 0.7.6 (Round 3 M3): P1 的 DfsId 为 0 会推出 p1fid = 0，写回后 P1 频率为 0
     // （比不改写更糟）。同样放弃改写。
     if(p1dfs == 0) return;
@@ -128,8 +136,38 @@ void pmRyzen_init_PState(){
     uint64_t p1fid = (uint64_t)((p0spd * 0.80F) / 200.0F * (float)p1dfs);
     // 0.7.6 (Round 3 M3): 值域保护 —— FID 只有 8 位。
     if(p1fid > 0xffULL) p1fid = 0xffULL;
+    // 0.7.6 (Round 4 M4): FID == 0 的护栏 —— 写进去会让 P1 的频率变成
+    // 0/DfsId*200 = 0 MHz（比不改写更糟）。O13 把 DfsId 掩码放宽到 6 位后
+    // p0dfs 变大、p1fid 变小，命中概率略有上升
+    //（可构造：p0fid=64, p0dfs=63, p1dfs=1 ⇒ trunc(0.8·64·1/63)=0）。
+    if(p1fid == 0) return;
     
-    wrmsr64(MSR_PSTATE_0 + 1, (p1 & ~0xFFULL) | p1fid | (1ULL << 63));
+    // bit63 = PstateEn（1 == enabled）—— 把固件的 P-state 表打开。
+    uint64_t p1new = (p1 & ~0xFFULL) | p1fid | (1ULL << 63);
+    
+    // 0.7.6 (T8 / O26): 原来用裸 wrmsr64 改写固件 P1 定义 ——
+    // 裸写失败时无从得知，P1 定义可能被写坏却不知情。
+    // 改用 pmRyzen_wrmsr_safe（走 provider 的 write_msr，可失败可检测）。
+    // Q2 决策 (a)：保留改写，但加保护。
+    //
+    // 0.7.6 (Round 4 M2): 「可检测」是**有条件的** —— write_msr() 在
+    // _wrmsr_carefully 缺失时回退到裸 wrmsr64 并恒返回成功，那种配置下
+    // 下面的失败分支永远不会触发。写入本身在两条路径上都会发生。
+    if(!pmRyzen_wrmsr_safe(pmRyzen_io_service_handle, MSR_PSTATE_0 + 1, p1new)){
+        IOLog("AMDCPUSupport::pmRyzen_init_PState WARN: failed to write MSR 0x%X, "
+              "P1 definition left unchanged\n", MSR_PSTATE_0 + 1);
+        return;
+    }
+    
+    // 0.7.6 (T8 / O26): 改写前后的值在 -amdpdbg 下打印 ——
+    // 开机改写固件定义是"看不见"的动作，出了问题只能靠日志回溯。
+    if(pmRyzen_debug_enabled){
+        IOLog("AMDCPUSupport::pmRyzen_init_PState: P0 fid=%llu dfs=%llu (%.1f MHz); "
+              "P1 def 0x%llX -> 0x%llX (fid %llu -> %llu)\n",
+              p0fid, p0dfs, (double)p0spd,
+              (unsigned long long)p1, (unsigned long long)p1new,
+              (unsigned long long)(p1 & 0xffULL), (unsigned long long)p1fid);
+    }
 }
 
 inline void set_PState(pmProcessor_t *cpu, uint8_t state){

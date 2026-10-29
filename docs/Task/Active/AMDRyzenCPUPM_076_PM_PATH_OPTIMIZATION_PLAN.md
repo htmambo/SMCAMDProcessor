@@ -291,7 +291,7 @@ PM 线程单生产者写入关键事件快照，崩溃重启后由用户态或 k
 | T5 | 唤醒恢复下沉 work loop（O8）+ `PStateCtl` 一致性与竞态（O9/O25）+ 频率种子失效（O14） | O8/O9/O25/O14 | T4 | ⬜ |
 | T6 | 全核屏障串行化（O10） | O10 | T5 | ⬜ |
 | T7 | `pmRyzen_stop()` 死循环修复（O11） | O11 | — | ✅ **已完成**（2026-10-29） |
-| T8 | RAPL 换算修正（O12/O24）+ DfsId 掩码与 P1 改写策略（O13/O26） | O12/O13/O24/O26 | T0 | 🔄 **进行中**（2026-10-29，Q1=b / Q2=a 已决策） |
+| T8 | RAPL 换算修正（O12/O24）+ DfsId 掩码与 P1 改写策略（O13/O26） | O12/O13/O24/O26 | T0 | ✅ **已完成**（2026-10-29，Q1=b / Q2=a；对外功率值不变，双值对照见 §5.2） |
 | T9 | **符号校验与空指针防护**（O20/O21）+ 有界重试（O15）+ 越界/NULL（O28/O33）+ 清理与引用漂移（O16/O29/O30）+ panic 降级（O32） | O15~O16/O20/O21/O28/O29~O30/O32/O33 | — | ✅ **已完成**（2026-10-29，Round 2 后补 F1/F2/F3/F7/F9） |
 | T10 | 无锁 Ring Buffer（O18） | O18 | — | ⬜ |
 | T11 | 用户态读路径去 MSR 化（O19） | O19 | T4 | ⬜ |
@@ -467,6 +467,10 @@ CpbDis 位（bit 25），再在全核屏障内写回。缓存无效时跳过 CPB
 
 ### T8 RAPL 换算 + DfsId/P1 策略（O12/O13/O24/O26）
 
+> **实施口径（2026-10-29，Q1=b / Q2=a）**：见 §八。RAPL 的系统性缩放
+> **这一轮不切换对外值**（双值对照一周后再单独提交切换）；P1 改写**保留**，
+> 但加保护。
+
 1. **RAPL 单位（O12）**：
    - ❌ **不修改** `cpp:376-377` 的位掩码（AMD 布局 ESU 12:8 / TU 19:16，现有代码正确）。
    - 删除 `e *= pwrTimeUnit * 1000;`（无量纲依据），或按 T0 的 PPR 核实结论
@@ -477,15 +481,38 @@ CpbDis 位（bit 25），再在全核屏障内写回。缓存无效时跳过 CPB
      （无符号自然回绕）。
    - ⚠️ 该项会**改变用户态可见的功率数值**。需与 App 侧显示一起验收
      （`ViewController.swift:131` 直接按瓦特输出），并与用户核对新读数合理性。
+   - **实施结果（Q1=b）**：修正值与旧值**同时**算出来，**对外仍然给旧值**
+     （`uniPackageEnergy = eLegacy`，且乘法括号位置与旧代码严格一致以保证
+     逐位相同）；修正值只在 `-amdpdbg` 下每 30 s 打印一次，双值对照一周后
+     再用单独一次提交切换。
+     - **逐位等价性已用独立程序验证**（把新旧两个公式各自编译成独立函数，
+       在 AMD 典型单位 TU=0xA / ESU=0x0D 下扫描近百万组样本）：
+       **非回绕区间 8638 个样本位级完全相同（0 处差异）**；
+       差异**只**出现在 32 位回绕区 —— 正是 O12③ 要修的地方
+       （旧公式丢掉 `1 + energyValue`）。实测双值比值
+       `corrected/legacy = 1.024000`（= 2^TU / 1000，TU=0xA），
+       即修正后的读数比现在高约 2.4%。
 2. **能量基线（O24）**：睡眠/唤醒时重置 `pwrLastTSC` / `lastUpdateEnergyValue`；
    `seconds` 计算加零除保护。
+   - **实施结果**：睡眠路径（`setPowerState()` 的 powerStateOrdinal == 0 分支）
+     只置一个 `pwrNeedRebaseline` 标志 —— 该路径必须保持**无锁、且不读任何 MSR**
+     （0.7.5 的既有铁律）。唤醒后第一次采样消费该标志：只把基线对齐到
+     当前值，**不产出功率读数**（保留睡眠前的上一次读数）。
 3. **DfsId 掩码（O13）**：`pmAMDRyzen.c:108,111` 改 `& 0x3f`，与全仓一致。
+   - **实施结果**：已改。同时把 P0 的 Fid 也显式取出（`p0fid`）并加值域保护
+     （Fid == 0 或 DfsId == 0 都放弃改写）。
 4. **P1 改写策略（O26）**：`pmRyzen_init_PState()` 在开机时改写固件
    `MSR_PSTATE_0+1`。需要一次显式决策：
    - (a) 保留但加零除保护 + bit63 语义核实（BKDG / LHM 注释
      `PstateEn[63], 1 == enabled`）+ 改用 `write_msr`（可失败可检测）而非裸 `wrmsr64`；
    - (b) 去掉该改写，完全使用固件提供的 P-state 表。
    - 推荐 (a)：保留既有行为但让它可检测、可回退。
+   - **实施结果（Q2=a）**：保留改写 + 三重保护 ——
+     ① `pmRyzen_wrmsr_safe()`（走 provider 的 `write_msr`，可失败可检测）
+     取代裸 `wrmsr64`；② DfsId/Fid 的零值与 8 位值域保护；
+     ③ 改写前后的值在 `-amdpdbg` 下打印（新增 `pmRyzen_debug_enabled`
+     全局作为 `-amdpdbg` 开关在 PM 侧的镜像，由 provider 在 `start()` 里
+     `pmRyzen_init()` **之前**同步）。
 
 ### T9 符号校验、防护与清理（O15/O16/O20/O21/O28/O29/O30）
 
@@ -566,7 +593,7 @@ CpbDis 位（bit 25），再在全核屏障内写回。缓存无效时跳过 CPB
 ### 5.1 部署与现场验证（第一批）
 
 产物：`build/AMDRyzenCPUPowerManagement-0.7.6.kext.zip`
-（二进制 UUID `8045BDAA-FA33-352F-88FB-AB27AA4B3975`，保留符号表，可直接 atos）。
+（二进制 UUID `7755F97A-99F5-338B-AD6E-7A7DEE1697BD`，保留符号表，可直接 atos）。
 
 > **boot 关键操作不代执行**（沿用 0.7.4 的记录惯例），请手动安装：
 
@@ -595,6 +622,72 @@ kmutil showloaded --list-only | grep -i amdryzen
 | 睡眠/唤醒 | 无 panic；`pmset -g log` 的唤醒次数与 0.7.5 同量级 |
 
 回滚：把 `~/AMDRyzenCPUPowerManagement-0.7.5.bak.kext` 拷回 EFI 即可。
+
+### 5.2 T8 的专项验证（RAPL 双值对照 + P1 改写保护）
+
+T8 按 Q1=(b) 落地：**对外功率值不变**，修正值只在 `-amdpdbg` 下并排打印。
+要验证的是"两个值的关系"，而不是"新值对不对"。
+
+**准备**：给 OpenCore 的 boot args 加上 `-amdpdbg`，重启。
+
+**1. 双值对照（Q1=b 的核心）**
+
+```bash
+# 实时看双值日志（每 30 s 一条）
+log stream --predicate 'eventMessage CONTAINS "updatePackageEnergy"' --info
+```
+
+期望日志形如：
+
+```
+AMDCPUSupport::updatePackageEnergy: legacy 52.317 W | corrected 53.584 W (delta +1.267 W, ratio 1.0241)
+```
+
+判读要点：
+
+- `ratio` 应是一个**稳定常数**（= 1 / (TU × 1000) = 2^TU / 1000；
+  AMD 典型 TU = 0xA ⇒ ratio ≈ 1.0241）。若 ratio 随负载抖动，说明换算里还有别的问题。
+- `legacy` 应与 App 里显示的功率**一致**（App 读的就是对外值）。
+- 空闲时 `legacy` 应落到接近 0，而不是一个固定的小底噪。
+- **第一条**日志不应是巨大的开机尖峰（Round 4 M1 已修：开机时播种能量基线，
+  第一次采样只建基线、不产出读数）。
+
+**2. 唤醒后无尖峰（O24）**
+
+```bash
+# 触发一次睡眠/唤醒，然后立刻看功率
+log stream --predicate 'eventMessage CONTAINS "updatePackageEnergy"' --info
+```
+
+期望：唤醒后**第一条**日志不出现几百瓦的尖峰；日志里能看到
+`energy baseline re-established after sleep`（重建基线那一次不产出读数）。
+
+**3. 开机 P1 改写（O26）**
+
+```bash
+log show --predicate 'eventMessage CONTAINS "init_PState"' --info | tail -5
+```
+
+期望（`-amdpdbg` 下）：
+
+```
+AMDCPUSupport::pmRyzen_init_PState: P0 fid=… dfs=… (…. MHz); P1 def 0x… -> 0x… (fid … -> …)
+```
+
+- `P1 def` 的新旧值应当不同（说明改写确实发生了）。
+- 若出现 `failed to write MSR 0xC0010065`，说明写入被拒绝且**固件 P1 定义保持原样**
+  —— 这是**安全降级**，不是故障；但要在汇报里记下来。
+  - 注意（Round 4 M2）：这条 WARN **只在 `_wrmsr_carefully` 符号存在时**才可能
+    出现 —— `write_msr()` 在该符号缺失时回退到裸 `wrmsr64` 并恒报成功，
+    那种配置下写入检测不到失败。**没有出现 WARN 不等于写入被验证过**。
+- **各核 P1 定义应一致**（Round 4 M7）：改写从裸 `wrmsr64`（仅当前 CPU）
+  换成了 `write_msr`（走 `_wrmsr_carefully`，全核写 + 一次全核 rendezvous）。
+  写入值本身未变。
+
+**4. RAPL 读失败不再产生假尖峰（O12）**
+
+无法在正常机器上稳定构造读失败。静态验证已由自检脚本覆盖
+（`read_msr()` 返回值被检查、读失败时跳过采样且不动基线）。
 
 ---
 
@@ -789,11 +882,63 @@ dispatch ⇒ 系统此后**一个 PM dispatch 都没有** ⇒ CPU 永远进不�
 M1/M2 的实际越界后果、M3 的除零在真实硬件上是否可触发、
 `pmRyzen_stop()` 的收敛时序均**只有静态推理与编译期证据**。
 
+### Round 4（代码阶段，聚焦 T8，只读子代理，2026-10-29）
+
+**VERDICT: CONDITIONAL** —— T8 的四项改动（O12/O13/O24/O26）全部按已登记的
+D22–D26 决策实现；Q1=(b)「对外值不变」在**源码级、编译器级、产物机器码级**
+三重验证均成立；Q2=(a) 的开机改写仍会发生且失败可安全降级；
+**无 BLOCKER / HIGH / MAJOR**。扣分项为 2 个 MEDIUM + 5 个 LOW + 1 个 NIT。
+
+**Q1 约束的三重验证（对外功率值逐位不变）**：
+
+| 层级 | 证据 |
+|---|---|
+| 源码级 | 旧 `e *= pwrTimeUnit * 1000` 解析为 `e = e * (pwrTimeUnit * 1000)`；新代码 `eLegacy = eCorrected * (pwrTimeUnit * 1000.0)`，结合律一致；`1000`(int)→double 为精确提升 |
+| 编译器级 | 独立编译旧/新函数体，`mulsd <1000.0 常量>` → `mulsd` 的指令序列**同构** |
+| 机器码级 | 产物反汇编：`movsd pwrTimeUnit` → `mulsd 0x2c19(%rip)`（=1000.0）→ `mulsd %xmm1` → `movsd %xmm0, uniPackageEnergy` |
+
+另用独立程序在 AMD 典型单位（TU=0xA / ESU=0x0D）下扫描近百万组样本：
+**非回绕区间 8638 个样本位级完全相同（0 处差异）**；差异**只**出现在
+32 位回绕区 —— 正是 O12③ 要修的地方。实测双值比值
+`corrected/legacy = 1.024000`（= 2^TU / 1000），即修正后读数高约 2.4%。
+
+**已修（Round 4 意见全部落地）**：
+
+| 编号 | 严重度 | 问题 | 修法 |
+|---|---|---|---|
+| M1 | MEDIUM | 开机后**首个**功率读数仍是巨大假尖峰 —— `lastUpdateEnergyValue` 从未被播种，第一次采样的 delta = 整个 RAPL 计数器而分母只有 ~50 ms。该尖峰会**直接污染 Q1 计划的那一周双值对照**（对照日志第一行就是巨大假值） | `initWorkLoop()` 里置 `pwrNeedRebaseline = true;`，复用 O24 的机制：首次采样只建基线、不产出读数 |
+| M2 | MEDIUM | O26 的「可检测写」是**有条件的** —— `write_msr()` 在 `_wrmsr_carefully` 缺失时回退裸 `wrmsr64` 并恒返回成功，那种配置下失败分支永不触发 | 代码注释与 §5.2 的现场验证预期都改成与代码一致（见下） |
+| M3 | LOW | `pwrNeedRebaseline` 在睡眠分支置位，与在飞 tick 存在竞态 ⇒ 标志可能被提前消费而丢失（窗口 ~µs / tick 50~1200 ms，概率约 1e-6/次睡眠，但后果正是 O24 的目标症状） | 置位点移到**唤醒分支**的 `resumeWorkLoop()` **之前** —— 此刻工作循环仍是 disabled 的，不可能有 tick 抢先消费 |
+| M4 | LOW | 缺 `p1fid == 0` 护栏 —— 写进去会让 P1 频率变成 0 MHz（比不改写更糟）；O13 放宽掩码后命中概率略升 | 加 `if(p1fid == 0) return;`，与既有 `p1dfs == 0` 护栏并列 |
+| M5 | LOW | `seconds <= 0.0` 护栏不覆盖注释点名的 `xnuTSCFreq == 0`（除以 0 得 +inf，通不过该护栏 ⇒ 静默 0 W）；`tscFreqValid` 只看符号存在、不校验数值 | `start()` 里改成 `tscFreqValid = (xnuTSCFreq > 0);`；注释改正 |
+| M6 | LOW | PM 侧新增 WARN 未受 `pmRyzen_debug_enabled` 门控，与 D26 字面口径不符 | **不改代码**（该 WARN 正是用户需要看到的失败告警，且符合该文件既有惯例），改为修正 D26 的措辞：PM 侧**详细**日志受门控，WARN 级失败告警不受门控 |
+| M7 | LOW | 写入作用域变化未登记：裸 `wrmsr64`（仅当前 CPU）→ `write_msr`（走 `_wrmsr_carefully`，全核写 + 一次全核 rendezvous） | 在 §十三 的文件日志中登记；现场验证时确认各核 P1 定义一致（`-amdpdbg` 日志已打印改写前后值） |
+| M8 | LOW | 32 位「回绕」与「计数器复位」无法区分 —— 非睡眠路径的复位（S0ix、驱动重载等）仍会产生巨大尖峰 | **接受为已知限制**（属 O24 范畴扩展，本轮不改），登记在案 |
+| NIT-1 | NIT | 重建路径用 `ctsc`、常规路径用第二次 `rdtsc64()`，两处基线时间戳来源不一致（相对误差 ~1e-6） | **不改** —— 常规路径的 `pwrLastTSC = rdtsc64()` 与 0.7.5 一致，改动会让对外值偏离"逐位相同"的承诺（Q1 的对照前提） |
+
+**未能验证**（同前几轮）：本机非 Hackintosh 目标机，RAPL 计数器的实际值、
+`_wrmsr_carefully` 缺失场景的实测行为、`wrmsr_carefully` 是否取 `cpu_lock`
+（XNU 源码不可达）、IOKit 定时器在 `enableAllEventSources()` 后是否自动重新 arm
+（若主定时器唤醒后不再 tick，`pwrNeedRebaseline` 永不消费，功率读数冻结在
+睡眠前值 —— 属 0.7.5 既有行为）。
+
 ---
 
 ## 十一、验收结果
 
-（待填）
+| 项 | 状态 | 证据 |
+|---|---|---|
+| `xcodebuild -scheme AMDRyzenCPUPowerManagement -configuration Release build` | ✅ | BUILD SUCCEEDED；改动文件内零 warning |
+| `xcodebuild -scheme "AMD Power Gadget" -configuration Release build` | ✅ | BUILD SUCCEEDED |
+| 独立只读子代理复审无 MAJOR/BLOCKER | ✅ | Round 1 PARTIAL → Round 2/3/4 CONDITIONAL，MAJOR/BLOCKER 已全部清零 |
+| 屏障内无 IOLog | ✅ | 花括号级扫描：cpp 屏障区间 `(157-219)(250-307)(849-857)(894-898)(1081-1097)(1167-1193)`、pmAMDRyzen.c `(195)` 内均无 IOLog |
+| PM 路径无新增锁 | ✅ | diff 内无 `OSLock/IOLock/mutex/spinlock/IOCommandGate` |
+| PM 路径无 panic | ✅ | 全 kext 无 `panic(` 调用（注释已剥离） |
+| 用户态 ABI 不变 | ✅ | UserClient 与 App 侧零改动；selector 编号 / `SleepState` 布局 / 结构体大小未变 |
+| 「调用返回即可见」语义不变 | ✅ | 功率选择子仍现读 `uniPackageEnergy` |
+| 对外功率值逐位不变（Q1=b） | ✅ | 源码级 + 编译器级 + 机器码级三重验证；非回绕区间 8638 样本 0 差异 |
+| 自检门禁 | ✅ | `.omc/fullauto/amdpowermgmt-076-optimization/selfcheck.py` 76/76 通过 |
+| **运行时验证** | ❌ **未做** | 本机非 Hackintosh 目标机 —— 部署与 72h 现场验证必须由用户在目标机执行（§5.1 / §5.2） |
 
 ---
 
@@ -822,6 +967,9 @@ M1/M2 的实际越界后果、M3 的除零在真实硬件上是否可触发、
   新增成员 `hwcrInitRetryLeft[MaxCpus]`（O4 重试预算）、
   `pstateDumpRetryExhausted`（O23 屏障外报告标志）、`tscFreqValid`（O21）、
   `raplValid`（O32 RAPL 单位读取降级）。
+- **T8（2026-10-29, Round 4）**：新增成员 `pwrNeedRebaseline`（O24 睡眠后重建
+  能量基线的标志）、`lastPowerDiagNs`（O12 双值对照日志的节流时间戳）；
+  `pmRyzen_wrmsr_safe()` 声明改为返回 `int`（与 C 侧的 `extern "C"` 定义一致）。
 - **Round 3 m2（2026-10-29）**：`presentAlert()` 的注释"response 置 0"改为
   `UINT_MAX`，并补上"为什么不是 0"（0 是合法按钮下标，会被误读成用户同意）。
   - Review verdict: Round 2 CONDITIONAL → 已按 F1/F4/F5/F7 意见修完；
@@ -856,8 +1004,34 @@ M1/M2 的实际越界后果、M3 的除零在真实硬件上是否可触发、
   原实现是**无限**重试（每次 2 ms），不是注释原先写的 50×2 s。
   并在超限日志里同时打印实际查找次数与重试上限（退出时 `lookupAttempts` = 上限 + 1，
   只印一个数字会让人对不上代码）。
+- **T8 / O12（2026-10-29, Round 4）**：`updatePackageEnergy()` 修正 RAPL 换算 ——
+  ① `read_msr(kMSR_PKG_ENERGY_STAT, ...)` 检查返回值，失败则**跳过本次采样**
+  （保留上一次的 `uniPackageEnergy`，且不动基线）；② 回绕改用无符号自然回绕
+  `uint32_t energyDelta = (uint32_t)(energyValue - lastUpdateEnergyValue)`
+  （旧公式 `UINT32_MAX - lastUpdateEnergyValue` 丢掉了 `1 + energyValue`）；
+  ③ 修正值 `eCorrected`（对齐 LHM，不含 `pwrTimeUnit`）与旧值 `eLegacy`
+  **同时算出**，**对外仍然给旧值**（Q1=b）；旧值的乘法括号位置与 0.7.5 严格一致
+  （`e * (pwrTimeUnit * 1000)`，浮点乘法不结合），保证逐位相同。
+  - **Round 4 M1（2026-10-29）**：`initWorkLoop()` 里置 `pwrNeedRebaseline = true;`
+    —— 播种能量基线。原先 `lastUpdateEnergyValue` 从未被播种，开机后第一个采样
+    的 delta = 整个 RAPL 计数器而分母只有 ~50 ms ⇒ 数千瓦量级的假尖峰，
+    且会**直接污染 Q1 计划的那一周双值对照**（对照日志第一行）。
+  - **Round 4 M3（2026-10-29）**：`pwrNeedRebaseline` 的置位点从**睡眠分支**
+    移到**唤醒分支**的 `resumeWorkLoop()` 之前 —— 睡眠分支置位与在飞 tick
+    存在竞态（工作循环线程可能抢先消费掉标志）。
+  - **Round 4 M5（2026-10-29）**：`tscFreqValid` 不再看"符号存在"就算有效，
+    改成 `tscFreqValid = (xnuTSCFreq > 0);` —— 符号存在不等于值有效。
+- **T8 / O24（2026-10-29, Round 4）**：`seconds <= 0.0` 零除保护；
+  新增成员 `pwrNeedRebaseline` —— 睡眠路径（`setPowerState()` 的
+  powerStateOrdinal == 0 分支）**只置一个 bool 标志**（该路径必须无锁、
+  且不读任何 MSR），唤醒后第一次采样消费它：只对齐基线，不产出读数。
+- **T8 / O26（2026-10-29, Round 4）**：`pmRyzen_wrmsr_safe()` 返回类型
+  `void` → `int`（1 = 成功），使写入可检测；`pmRyzen_init_PState()` 改用它
+  取代裸 `wrmsr64`；新增全局 `pmRyzen_debug_enabled`（`-amdpdbg` 在 PM 侧的镜像），
+  由 `start()` 在 `pmRyzen_init()` **之前**同步。
   - Review verdict: Round 2 CONDITIONAL → 已按 F1/F4/F5/F7/P2 意见修完；
-    Round 3 CONDITIONAL → m1/m2 已修，m3 接受残留（见 §十）
+    Round 3 CONDITIONAL → m1/m2 已修，m3 接受残留（见 §十）；
+    Round 4 待填
 
 ### File: AMDRyzenCPUPowerManagement/pmAMDRyzen.c
 - T7（2026-10-29, Phase 1）：`pmRyzen_exit_idle()` 非 MWAIT 分支改为按
@@ -892,14 +1066,34 @@ M1/M2 的实际越界后果、M3 的除零在真实硬件上是否可触发、
   放弃改写固件而不是整数除零 panic；顺带把整数除法改成浮点除法
   （原式先做整数除法会截断小数，推出来的 P0 频率是错的）；
   P1 的 FID 加 8 位值域保护。**DfsId 掩码 `0x1f → 0x3f`（O13）与
-  `write_msr` 化 / 可检测化（O26）留在 T8 一并做。**
+  `write_msr` 化 / 可检测化（O26）已在 T8 一并做（见下）。**
+- **T8 / O13 + O26（2026-10-29, Round 4）**：`pmRyzen_init_PState()` 的
+  DfsId 掩码 `0x1f` → `0x3f`（bits 13:8，6 位，与全仓 `dumpPstate()` 一致）；
+  裸 `wrmsr64` 改写换成可检测的 `pmRyzen_wrmsr_safe()`，写失败打 IOLog 并
+  **保持固件原定义**（安全降级）；改写前后的值在 `-amdpdbg` 下打印。
+  新增全局 `pmRyzen_debug_enabled`（`-amdpdbg` 在 PM 侧的镜像）。
+  - **Round 4 M4（2026-10-29）**：加 `if(p1fid == 0) return;` —— 写 FID=0 的
+    P1 定义会让 P1 频率变成 0 MHz（比不改写更糟）；O13 放宽掩码后命中概率略升。
+  - **Round 4 M7（2026-10-29）**：写入**作用域**变化登记 —— 裸 `wrmsr64`
+    （仅当前 CPU）→ `write_msr`（走 `_wrmsr_carefully`，**全核写 + 一次全核
+    rendezvous**）。写入值本身未变；现场验证时确认各核 P1 定义一致。
+  - **Round 4 M2（2026-10-29）**：「可检测」是**有条件的** ——
+    `write_msr()` 在 `_wrmsr_carefully` 缺失时回退裸 `wrmsr64` 并恒返回成功，
+    那种配置下失败分支永不触发。写入在两条路径上都会发生。代码注释与
+    §5.2 的现场验证预期均已改成与代码一致。
   - Review verdict: Round 2 CONDITIONAL → 已按 F2/F3/F8/F9 意见修完（F8 保留为防御性边界）；
-    Round 3 CONDITIONAL → M1/M2/M3 已修，m1/m2 已修，m3 接受残留（见 §十）
+    Round 3 CONDITIONAL → M1/M2/M3 已修，m1/m2 已修，m3 接受残留（见 §十）；
+    Round 4 待填
 
 ### File: AMDRyzenCPUPowerManagement/pmAMDRyzen.h
 - T9（2026-10-29, Phase 1）：三个拓扑 inline helper 加边界 + NULL 检查，
   新增 `pmRyzen_get_lcpu()`；新增 `PMRYZEN_EXIT_IDLE_MAX_SPINS`；
   `pmRyzen_init()` 返回类型改为 `boolean_t`。
+- **T8（2026-10-29, Round 4）**：`pmRyzen_wrmsr_safe()` 声明改为返回 `int`
+  （1 = 成功），让写入可检测 —— 返回类型用 `int` 而不是 `bool`：
+  头文件是 C 可见的，C 的 `_Bool` 与 C++ 的 `bool` 不是同一个类型，
+  `extern "C"` 链接下用 `int` 才没有 ABI 歧义；
+  新增 `extern int pmRyzen_debug_enabled;`（`-amdpdbg` 在 PM 侧的镜像）。
   - Review verdict: 待 Round 2 复审
 
 ### File: AMDRyzenCPUPowerManagement/AMDRyzenCPUPMUserClient.cpp

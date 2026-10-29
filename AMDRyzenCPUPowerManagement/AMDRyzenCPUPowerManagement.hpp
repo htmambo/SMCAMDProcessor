@@ -60,7 +60,7 @@ void i386_deactivate_cpu(void);
 //    int wrmsr_carefully(uint32_t msr, uint64_t val);
 
 
-void pmRyzen_wrmsr_safe(void *, uint32_t, uint64_t);
+int pmRyzen_wrmsr_safe(void *, uint32_t, uint64_t);
 uint64_t pmRyzen_rdmsr_safe(void *, uint32_t);
 
 
@@ -320,6 +320,14 @@ private:
     // 0.7.6 (Round 2 P2): RAPL 单位寄存器读不到时（原代码在这里 panic），
     // 功率测量整体停用，而不是把机器带走。
     bool raplValid = false;
+    // 0.7.6 (T8 / O24): 睡眠后 RAPL 计数器可能从 0 重新开始，
+    // 与睡眠前的基线相减会得到巨大的 delta ⇒ 唤醒后第一个功率读数出现
+    // 巨大尖峰。睡眠时置位，唤醒后的第一次采样用它重建基线。
+    bool pwrNeedRebaseline = false;
+    // 0.7.6 (T8 / O12): 双值对照日志的节流时间戳（ns）。
+    // work loop 主定时器最短 50 ms 一跳，逐次打印会把日志刷爆；
+    // 每 30 s 一次足够看出趋势。
+    uint64_t lastPowerDiagNs = 0;
     
     uint64_t xnuTSCFreq = 1;
     // 0.7.6: _tscFreq is a pointer to a kernel variable. When the symbol is
