@@ -595,6 +595,24 @@ CpbDis 位（bit 25），再在全核屏障内写回。缓存无效时跳过 CPB
 产物：`build/AMDRyzenCPUPowerManagement-0.7.6.kext.zip`
 （二进制 UUID `7755F97A-99F5-338B-AD6E-7A7DEE1697BD`，保留符号表，可直接 atos）。
 
+> **版本号单一来源（2026-10-29 合并上游后）**：本仓库已引入
+> `AMDRYZEN_KEXT_VERSION`（project 级 build setting，Debug/Release 各一处）
+> 作为 kext 版本的唯一来源，`CFBundleVersion` / `CFBundleShortVersionString` /
+> `MODULE_VERSION` 全部由它派生；App 侧从自己的 Info.plist 读
+> `LatestKnownAMDRyzenCPUPowerManagementVersion`（同一个 build setting 注入），
+> Swift 里只保留硬编码回退值。
+> ⇒ **下次升版本只改 `AMDRYZEN_KEXT_VERSION` 一处**，不需要再改
+> `project.pbxproj` 的 4 个版本号，也不需要改 Swift。
+> 本轮 0.7.6 的升版就是按这套机制做的（`AMDRYZEN_KEXT_VERSION = 0.7.6`）。
+>
+> **打包路径的差异**：仓库另有 `Scripts/build.sh`（上游新增，本地/CI 统一入口，
+> 产出 `build/Release.zip`，含三个产物）。它会准备依赖（初始化
+> MacKernelSDK 子模块、下载 Lilu、克隆 VirtualSMC），**需要联网**；
+> 本机用的是仓库外的 `../sdk` 布局（Lilu.kext / VirtualSMC.kext 是软链，
+> MacKernelSDK 是薄目录），跑该脚本会触发子模块初始化与网络克隆。
+> 因此本轮产物仍用直接 `xcodebuild` + 手工 zip 产出（kext-only，便于直接
+> 装进 EFI）。CI 走的是 `Scripts/build.sh`。
+
 > **boot 关键操作不代执行**（沿用 0.7.4 的记录惯例），请手动安装：
 
 ```bash

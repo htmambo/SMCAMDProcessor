@@ -21,6 +21,20 @@ SMCAMDProcessor
 CPBStatus|0|CPB状态（0：关闭，1：启用）
 SpeedID|1|频率表中的ID值，具体代表的频率请自行打开`AMD Power Gadget.app`后在选项的`Speed`->`Advanced Options`中查询
 
+## 本地构建
+
+```bash
+./Scripts/build.sh
+```
+
+脚本会自动准备依赖（`MacKernelSDK` 子模块、`Lilu.kext`、`VirtualSMC`）、构建全部 4 个 target，
+并输出 `build/Release.zip`（解压后根目录为 `AMDRyzenCPUPowerManagement.kext`、
+`SMCAMDProcessor.kext`、`AMD Power Gadget.app`）与产物版本摘要。
+
+常用参数：`--clean`（全量重建）、`--configuration Debug`、`--skip-deps`、`--no-zip`、`--help`。
+
+> kext 版本号由工程文件中的 `AMDRYZEN_KEXT_VERSION` 统一维护，升版时改这一处即可。
+
 # 截图
 
 ![istatmenus](imgs/istatmenus.png)
