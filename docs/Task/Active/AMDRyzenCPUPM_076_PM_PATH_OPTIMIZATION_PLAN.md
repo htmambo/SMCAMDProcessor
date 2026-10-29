@@ -607,11 +607,22 @@ CpbDis 位（bit 25），再在全核屏障内写回。缓存无效时跳过 CPB
 >
 > **打包路径的差异**：仓库另有 `Scripts/build.sh`（上游新增，本地/CI 统一入口，
 > 产出 `build/Release.zip`，含三个产物）。它会准备依赖（初始化
-> MacKernelSDK 子模块、下载 Lilu、克隆 VirtualSMC），**需要联网**；
-> 本机用的是仓库外的 `../sdk` 布局（Lilu.kext / VirtualSMC.kext 是软链，
-> MacKernelSDK 是薄目录），跑该脚本会触发子模块初始化与网络克隆。
-> 因此本轮产物仍用直接 `xcodebuild` + 手工 zip 产出（kext-only，便于直接
-> 装进 EFI）。CI 走的是 `Scripts/build.sh`。
+> MacKernelSDK 子模块、下载 Lilu、克隆 VirtualSMC）。本机用的是仓库外的
+> `../sdk` 布局（Lilu.kext / VirtualSMC.kext 是 gitignored 的相对软链，
+> 指向 `../sdk/`），链接一旦丢失，脚本就会落到联网下载分支并因
+> GitHub API 不可达而直接失败。
+> ⇒ 已修（提交 `fda899b`）：脚本新增 `link_local_sdk_dep()`，发现
+> `../sdk/Lilu.kext` / `../sdk/VirtualSMC.kext` 存在而仓库内链接缺失时，
+> 自动建立同名相对软链；`prepare_virtual_smc()` 额外接受预编译 kext 布局。
+> **本机现在可以正常跑 `./Scripts/build.sh --clean`（exit 0）**，不再需要
+> 手工 `xcodebuild` + zip。CI 没有 `../sdk`，行为与之前完全一致。
+>
+> 本仓库同时存在两种产物，口径不同、都可用：
+>
+> | 产物 | 内容 | 用途 |
+> |---|---|---|
+> | `build/Release.zip` | `Scripts/build.sh` 产出，根目录三个产物（`SMCAMDProcessor.kext` / `AMD Power Gadget.app` / `AMDRyzenCPUPowerManagement.kext`） | CI 口径的全量发布包 |
+> | `build/AMDRyzenCPUPowerManagement-0.7.6.kext.zip` | 仅 kext，7 个文件、保留符号表 | 直接装进 EFI 的部署包（下面步骤用它） |
 
 > **boot 关键操作不代执行**（沿用 0.7.4 的记录惯例），请手动安装：
 
@@ -635,7 +646,7 @@ kmutil showloaded --list-only | grep -i amdryzen
 |---|---|
 | 启动日志 | `AMDCPUSupport::start, Physical Count: 16, Logical Count: 16`（L1 缓存数值此时已修正） |
 | App | 能读到 kext 版本 `0.7.6`，无"版本过旧"提示 |
-| App 功率读数 | 本批**未改**功率公式（O12 属 T8，未实施），数值应与 0.7.5 一致 |
+| App 功率读数 | 对外值本批**未变**（Q1=b，仍取 legacy 公式）；数值应与 0.7.5 一致 |
 | App P-state 编辑 | root 运行或带 `-amdpnopchk` 时正常；否则走既有"无权限"提示路径 |
 | 睡眠/唤醒 | 无 panic；`pmset -g log` 的唤醒次数与 0.7.5 同量级 |
 
@@ -956,6 +967,7 @@ D22–D26 决策实现；Q1=(b)「对外值不变」在**源码级、编译器�
 | 「调用返回即可见」语义不变 | ✅ | 功率选择子仍现读 `uniPackageEnergy` |
 | 对外功率值逐位不变（Q1=b） | ✅ | 源码级 + 编译器级 + 机器码级三重验证；非回绕区间 8638 样本 0 差异 |
 | 自检门禁 | ✅ | `.omc/fullauto/amdpowermgmt-076-optimization/selfcheck.py` 76/76 通过 |
+| `Scripts/build.sh --clean` | ✅ | exit 0；`build/Release.zip`（91 文件 / 5767754 字节）；断链软链场景下自动恢复后仍 exit 0（提交 `fda899b`） |
 | **运行时验证** | ❌ **未做** | 本机非 Hackintosh 目标机 —— 部署与 72h 现场验证必须由用户在目标机执行（§5.1 / §5.2） |
 
 ---
@@ -1138,6 +1150,29 @@ D22–D26 决策实现；Q1=(b)「对外值不变」在**源码级、编译器�
   `0 <= fanIndex < getNumberOfFans()`；`getReadableStringForFan()` 对未知下标
   返回 `nullptr`，`strlen(nullptr)` 会 panic。
   - Review verdict: Round 2 后追加；Round 3 CONDITIONAL → M1 已修（见 §十）
+
+### File: Scripts/build.sh
+- **构建脚本修复（2026-10-29, 提交 `fda899b`）**：修「获取 Lilu 最新版本号失败
+  (GitHub API 不可达或触发限流?)」。根因不是网络，而是依赖判定的前提错了 ——
+  仓库根的 `Lilu.kext` / `VirtualSMC.kext` 是 gitignored 的**相对软链**，
+  指向仓库外的 `../sdk`；链接丢失后 `prepare_lilu` 的存在性检查落空，
+  直接跳到联网下载分支并 `die`，而本机其实有可用的预编译依赖。
+  - 新增 `link_local_sdk_dep()`：`../sdk/<name>` 存在而仓库内链接缺失时，
+    在仓库内建立同名相对软链；**断链软链（目标已删）先 `rm -f` 再重建** ——
+    否则 `-e` 失败但 `-L` 命中，链接被原样保留，检查再次落回联网分支，
+    重现同一个报错。
+  - `prepare_virtual_smc()` 增加第二个满足条件：预编译 kext 布局
+    `VirtualSMC.kext/Contents/Resources/VirtualSMCSDK/kern_vsmcapi.hpp`。
+    kext 编译只需要这一个头 —— pbxproj 里 `${PROJECT_DIR}/VirtualSMC` 只是
+    冗余搜索路径，目录不存在不影响编译。
+  - `prepare_lilu()` 删除时区分软链与目录：软链 `rm -f`、目录 `rm -rf`，
+    避免误删仓库外的 `../sdk/Lilu.kext`。
+  - **CI 行为不变**：CI 没有 `../sdk`，`link_local_sdk_dep` 是空操作，
+    仍走原有的下载 / 克隆路径。
+  - 附带记录（非本次改动引起）：清理 DerivedData 后首次构建曾报
+    `XCBuildData/build.db: disk I/O error`，伴随 build service internal
+    inconsistency；`killall XCBBuildService` 后重跑即 exit 0。属 Xcode
+    构建服务状态问题，与本脚本改动无关。
 
 ### File: AMDRyzenCPUPowerManagement/SuperIO/ISSuperIOIT86XXEFamily.cpp
 ### File: AMDRyzenCPUPowerManagement/SuperIO/ISSuperIONCT67XXFamily.cpp
