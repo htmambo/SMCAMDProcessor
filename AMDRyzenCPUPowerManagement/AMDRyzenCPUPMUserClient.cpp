@@ -11,6 +11,38 @@
 
 OSDefineMetaClassAndStructors(AMDRyzenCPUPMUserClient, IOUserClient);
 
+// 0.7.6 (O31): 输出缓冲区长度校验。
+//
+// IOExternalMethodArguments::structureOutputSize 在进入 externalMethod() 时是
+// **用户态提供的缓冲区字节数**（MIG external method 的约定），返回时要改成
+// 实际产出的字节数。原来的代码把"想写多少"直接当成"缓冲区有多大"，
+// 用户态只要给一个更小的缓冲区，就能让内核越界写堆 —— 一个用户态可控的
+// 内核堆溢出。
+//
+// 这里统一校验：缓冲区不够就返回 kIOReturnBadArgument，一个字节都不写。
+// （SDK 里的 IOExternalMethodDispatch 是旧版结构，没有内核的
+//  checkStructureOutputSize 辅助函数，所以在这里自行实现同样的检查。）
+static inline bool checkOutputSize(IOExternalMethodArguments *arguments, uint32_t requiredBytes){
+    if(arguments == NULL || arguments->structureOutput == NULL) return false;
+    if(arguments->structureOutputSize < requiredBytes) return false;
+    arguments->structureOutputSize = requiredBytes;
+    return true;
+}
+
+// 0.7.6 (O31 同类): 标量输出同样要校验。
+// scalarOutputCount 进入时是用户态提供的标量个数（UInt64 为单位），
+// scalarOutput 是用户态给的缓冲区指针。指针为 NULL 时写进去就是内核空指针写
+// —— 同样是用户态可触发的内核 panic。
+static inline bool checkScalarOutput(IOExternalMethodArguments *arguments, uint32_t count){
+    if(arguments == NULL) return false;
+    if(count == 0) return true;
+    if(arguments->scalarOutput == NULL) return false;
+    if(arguments->scalarOutputCount < count) return false;
+    arguments->scalarOutputCount = count;
+    return true;
+}
+
+
 
 bool AMDRyzenCPUPMUserClient::initWithTask(task_t owningTask,
                                              void *securityToken,
@@ -72,9 +104,13 @@ bool AMDRyzenCPUPMUserClient::hasPrivilege(){
              "A process is trying to make changes to your system.\nAffected process name: %s\n\nAuthorize?",
              taskProcessBinaryName);
     
-    unsigned int rf;
-    (*(fProvider->kunc_alert))(0, 0, NULL, NULL, NULL,
-                  "AMDRyzenCPUPowerManagement", buf, "Deny", "Until Process Terminate", "Once", &rf);
+    unsigned int rf = 0;
+    // 0.7.6: 弹窗通道不可用时（kunc_alert == nullptr）不能问用户 ⇒ 拒绝。
+    // 以前这里无条件解引用空指针，用户态一次调用就能把内核带崩。
+    if(!fProvider->presentAlert("AMDRyzenCPUPowerManagement", buf,
+                                "Deny", "Until Process Terminate", "Once", &rf)){
+        return false;
+    }
     
     
     if(rf == 1){
@@ -94,16 +130,19 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
                                                    OSObject *target, void *reference){
     
     if (fProvider->kextloadAlerts) {
-        unsigned int rf;
+        unsigned int rf = 0;
         
         char buf[128];
         snprintf(buf, 128,
                  "Kext alert detected: %d",
                  fProvider->kextloadAlerts);
         
-        (*(fProvider->kunc_alert))(0, 0, NULL, NULL, NULL,
-                      "AMDRyzenCPUPowerManagement", buf, "Ok", "Ok and Clear Alert", "WTF?", &rf);
-        if(rf == 1){
+        // 0.7.6: 弹窗不可用时降级为日志（presentAlert 内部已打印），
+        // 并清掉计数，避免每次调用都刷一遍。弹窗可用时保持原行为。
+        if(!fProvider->presentAlert("AMDRyzenCPUPowerManagement", buf,
+                                    "Ok", "Ok and Clear Alert", "WTF?", &rf)){
+            fProvider->kextloadAlerts = 0;
+        } else if(rf == 1){
             fProvider->kextloadAlerts = 0;
         }
     }
@@ -116,7 +155,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 0: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = (fProvider->kMSR_PSTATE_LEN) * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, (fProvider->kMSR_PSTATE_LEN) * sizeof(uint64_t))) return kIOReturnBadArgument;
 
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
@@ -132,7 +171,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 1: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = (fProvider->kMSR_PSTATE_LEN) * sizeof(float);
+            if(!checkOutputSize(arguments, (fProvider->kMSR_PSTATE_LEN) * sizeof(float))) return kIOReturnBadArgument;
 
             float *dataOut = (float*) arguments->structureOutput;
             
@@ -147,10 +186,10 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
             
             uint32_t numPhyCores = fProvider->totalNumberOfPhysicalCores;
 
-            arguments->scalarOutputCount = 1;
+            if(!checkScalarOutput(arguments, 1)) return kIOReturnBadArgument;
             arguments->scalarOutput[0] = numPhyCores;
             
-            arguments->structureOutputSize = numPhyCores * sizeof(float);
+            if(!checkOutputSize(arguments, numPhyCores * sizeof(float))) return kIOReturnBadArgument;
 
             float *dataOut = (float*) arguments->structureOutput;
 
@@ -164,7 +203,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 3: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = 1 * sizeof(float);
+            if(!checkOutputSize(arguments, 1 * sizeof(float))) return kIOReturnBadArgument;
             
             float *dataOut = (float*) arguments->structureOutput;
             dataOut[0] = fProvider->PACKAGE_TEMPERATURE_perPackage[0];
@@ -175,10 +214,10 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         //Yes, i am too lazy to write a struct
         case 4: {
             uint32_t numPhyCores = fProvider->totalNumberOfPhysicalCores;
-            arguments->scalarOutputCount = 1;
+            if(!checkScalarOutput(arguments, 1)) return kIOReturnBadArgument;
             arguments->scalarOutput[0] = numPhyCores;
             
-            arguments->structureOutputSize = (numPhyCores + 3) * sizeof(float);
+            if(!checkOutputSize(arguments, (numPhyCores + 3) * sizeof(float))) return kIOReturnBadArgument;
 
             float *dataOut = (float*) arguments->structureOutput;
             
@@ -197,7 +236,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 5: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = 1 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 1 * sizeof(uint64_t))) return kIOReturnBadArgument;
 
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
@@ -214,9 +253,17 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 6: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = (fProvider->totalNumberOfPhysicalCores) * sizeof(float);
+            if(!checkOutputSize(arguments, (fProvider->totalNumberOfPhysicalCores) * sizeof(float))) return kIOReturnBadArgument;
 
             float *dataOut = (float*) arguments->structureOutput;
+            
+            // 0.7.6: 除零保护。物理核数为 0 时整数除法会触发 #DE，
+            // 直接把内核带崩（用户态一次调用即可触发）。
+            if(fProvider->totalNumberOfPhysicalCores == 0){
+                arguments->scalarOutputCount = 0;
+                arguments->structureOutputSize = 0;
+                break;
+            }
             
             int lcpu_percore = fProvider->totalNumberOfLogicalCores / fProvider->totalNumberOfPhysicalCores;
             
@@ -234,7 +281,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 7: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = (8) * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, (8) * sizeof(uint64_t))) return kIOReturnBadArgument;
 
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
@@ -254,7 +301,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 8: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = sizeof(xStringify(MODULE_VERSION));
+            if(!checkOutputSize(arguments, sizeof(xStringify(MODULE_VERSION)))) return kIOReturnBadArgument;
             char *dataOut = (char*) arguments->structureOutput;
             
             for(uint32_t i = 0; i < arguments->structureOutputSize; i++){
@@ -268,7 +315,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 9: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = 1 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 1 * sizeof(uint64_t))) return kIOReturnBadArgument;
             
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
 
@@ -294,7 +341,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 11: {
             arguments->scalarOutputCount = 0;
             
-            arguments->structureOutputSize = 2 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 2 * sizeof(uint64_t))) return kIOReturnBadArgument;
             
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
 
@@ -326,7 +373,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 13: {
             arguments->scalarOutputCount = 0;
                 
-            arguments->structureOutputSize = 1 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 1 * sizeof(uint64_t))) return kIOReturnBadArgument;
                 
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
 
@@ -369,10 +416,10 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
             if(!fProvider->boardInfoValid)
                 fProvider->fetchOEMBaseBoardInfo();
             
-            arguments->scalarOutputCount = 1;
+            if(!checkScalarOutput(arguments, 1)) return kIOReturnBadArgument;
             arguments->scalarOutput[0] = fProvider->boardInfoValid ? 1 : 0;
             
-            arguments->structureOutputSize = 128;
+            if(!checkOutputSize(arguments, 128)) return kIOReturnBadArgument;
 
             char *dataOut = (char*) arguments->structureOutput;
             
@@ -390,7 +437,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 17: {
             arguments->scalarOutputCount = 0;
                 
-            arguments->structureOutputSize = 1 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 1 * sizeof(uint64_t))) return kIOReturnBadArgument;
                 
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
 
@@ -402,7 +449,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 18: {
             arguments->scalarOutputCount = 0;
                 
-            arguments->structureOutputSize = 1 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 1 * sizeof(uint64_t))) return kIOReturnBadArgument;
                 
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
 
@@ -429,7 +476,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
         case 90: {
             
             arguments->scalarOutputCount = 0;
-            arguments->structureOutputSize = 2 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 2 * sizeof(uint64_t))) return kIOReturnBadArgument;
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
             if(fProvider->superIO != nullptr){
@@ -454,7 +501,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
 
             
             arguments->scalarOutputCount = 0;
-            arguments->structureOutputSize = 1 * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, 1 * sizeof(uint64_t))) return kIOReturnBadArgument;
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
             dataOut[0] = (uint64_t)(fProvider->superIO->getNumberOfFans());
@@ -471,12 +518,33 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
             if(arguments->scalarInputCount != 1)
                 return kIOReturnBadArgument;
                 
+            // 0.7.6 (Round 3 残留, O31 同类): 扇区下标是用户态给的，必须先做
+            // 范围校验再拿去索引。原实现直接把它交给 getReadableStringForFan()，
+            // 而那边的边界检查是 `fan > activeFansOnSystem`（off-by-one），
+            // 于是：
+            //   - 下标 == 风扇数 ⇒ kFAN_READABLE_STRS[fan] 越界读 ⇒ 读到相邻
+            //     内存里的野指针 ⇒ strlen(野指针) ⇒ 内核 panic；
+            //   - 下标 > 风扇数  ⇒ 返回 nullptr ⇒ strlen(nullptr) ⇒ 内核 panic；
+            //   - 负下标（scalarInput 是 uint64，转 int 可为负）⇒ 越界读。
+            // 三条都是用户态可触发的内核 panic。
+            int fanIndex = (int)arguments->scalarInput[0];
+            if(fanIndex < 0 || fanIndex >= fProvider->superIO->getNumberOfFans())
+                return kIOReturnBadArgument;
             
-            const char *str = fProvider->superIO->getReadableStringForFan((int)arguments->scalarInput[0]);
-            arguments->structureOutputSize = (uint32_t)strlen(str);
+            const char *str = fProvider->superIO->getReadableStringForFan(fanIndex);
+            // getReadableStringForFan() 对未知下标返回 nullptr，strlen(nullptr)
+            // 会 panic，所以这里必须再挡一道。
+            if(str == NULL)
+                return kIOReturnBadArgument;
+            
+            // 0.7.6 (O31): 连 NUL 结束符一起写。原来的 strcpy 只拷 strlen
+            // 字节、不带 NUL，调用方按 C 字符串读会读到缓冲区之外。
+            // 需要的容量因此是 strlen+1。
+            uint32_t strLen = (uint32_t)strlen(str);
+            if(!checkOutputSize(arguments, strLen + 1)) return kIOReturnBadArgument;
             
             char *dataOut = (char*) arguments->structureOutput;
-            strcpy(dataOut, str, strlen(str));
+            strcpy(dataOut, str, strLen + 1);
             
             
             break;
@@ -488,7 +556,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
                 return kIOReturnNoDevice;
             
             arguments->scalarOutputCount = 0;
-            arguments->structureOutputSize = fProvider->superIO->getNumberOfFans() * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, fProvider->superIO->getNumberOfFans() * sizeof(uint64_t))) return kIOReturnBadArgument;
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
             fProvider->superIO->updateFanRPMS();
@@ -510,7 +578,7 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
                 return kIOReturnNoDevice;
             
             arguments->scalarOutputCount = 0;
-            arguments->structureOutputSize = fProvider->superIO->getNumberOfFans() * sizeof(uint64_t);
+            if(!checkOutputSize(arguments, fProvider->superIO->getNumberOfFans() * sizeof(uint64_t))) return kIOReturnBadArgument;
             uint64_t *dataOut = (uint64_t*) arguments->structureOutput;
             
             fProvider->superIO->updateFanControl();

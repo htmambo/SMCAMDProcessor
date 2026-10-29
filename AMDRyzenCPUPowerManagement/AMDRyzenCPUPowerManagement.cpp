@@ -16,6 +16,23 @@ static constexpr const struct tctl_offset tctl_offset_table[] = {
 bool ADDPR(debugEnabled) = false;
 uint32_t ADDPR(debugPrintDelay) = 0;
 
+// 0.7.6: 符号查找的最大**重试**次数（不含首次查找 ⇒ 总共 21 次查找）。
+// 以前是无限重试：符号一旦不存在（未来的 macOS、符号表变化、符号被裁剪），
+// kext 会永远卡在 init() 里，服务永远不发布 —— 表现为"某个 kext 不见了"。
+// 0.7.6 (Round 2 F5)：从"无限重试（每次 2 ms）"收紧到有上限。
+// 0.7.6 (Round 3 m1)：原注释写"每次间隔 1 s ⇒ 上限约 20 s"，与实现不符 ——
+// 本常量的单位是**毫秒**，实际总等待只有 ≈ 20 ms。这里按 20 ms 而不是 20 s：
+// _wrmsr_carefully 是内核静态符号表里的符号，要么存在要么不存在，
+// 不存在时不会"晚点出现"，多等毫无意义，只会把开机拖长
+// （macOS 新版本删掉该私有符号时，每次开机都要白等 20 s）。
+static constexpr uint32_t kSymbolLookupMaxAttempts = 20;
+static constexpr uint32_t kSymbolLookupRetryDelayMs = 1;
+
+// 0.7.6: HWCR 初始化的每 CPU 重试预算（每次唤醒重置）。
+// 唤醒路径上的重试必须有界：一个永久读失败的 HWCR 否则会在每个 tick 的
+// 无中断屏障里反复读+写，暴露窗口没有终点。
+static constexpr uint8_t PMRYZEN_HWCR_RETRY_BUDGET = 20;
+
 
 extern "C"{
 void pmRyzen_wrmsr_safe(void *handle, uint32_t addr, uint64_t value){
@@ -29,7 +46,8 @@ uint64_t pmRyzen_rdmsr_safe(void *handle, uint32_t addr){
 }
 
 pmRyzen_symtable_t pmRyzen_symtable={0};
-uint8_t pmRyzen_symtable_ready = 0;
+// 0.7.6: pmRyzen_symtable_ready 已删除 —— 它只写不读（等待它的循环早已被
+// 注释掉），留着只会误导下一个人以为还有同步点。
 
 }
 
@@ -40,16 +58,29 @@ bool AMDRyzenCPUPowerManagement::init(OSDictionary *dictionary){
     
     IOLog("AMDCPUSupport::enter dlinking..\n");
     
-    pmRyzen_symtable_ready = 0;
+    // 0.7.6: 查找必须有上限。超限后不再等待 —— write_msr() 自带裸 wrmsr64
+    // 兜底路径（见 write_msr），服务可以照常发布，只是失去"安全写"能力。
+    uint32_t lookupAttempts = 0;
     
 retry:
     find_mach_header_addr(getKernelVersion() >= KernelVersion::BigSur);
     pmRyzen_symtable._wrmsr_carefully = lookup_symbol("_wrmsr_carefully");
     
     if(!pmRyzen_symtable._wrmsr_carefully){
-        kextloadAlerts++;
-        IOSleep(2);
-        goto retry;
+        // 0.7.6 (Round 2 F5): kextloadAlerts 只在首次失败时自增一次。
+        // 原来每轮重试都 ++，用户看到的弹窗会变成 "Kext alert detected: 21"
+        // —— 语义失真（那不是 21 个告警，是同一个告警被重试了很多次）。
+        if(lookupAttempts == 0) kextloadAlerts++;
+        if(lookupAttempts++ < kSymbolLookupMaxAttempts){
+            IOSleep(kSymbolLookupRetryDelayMs);
+            goto retry;
+        }
+        // 0.7.6 (Round 3 m1): 日志同时给出实际查找次数与重试上限 ——
+        // 循环是"先判断再自增"，退出时 lookupAttempts = 上限 + 1，
+        // 只打印其中一个数字会让人对不上代码。
+        IOLog("AMDCPUSupport::init WARN: _wrmsr_carefully not found after %u attempt(s) "
+              "(max retries %u), falling back to unsafe wrmsr64\n",
+              lookupAttempts, kSymbolLookupMaxAttempts);
     }
     
     
@@ -61,7 +92,6 @@ retry:
     pmRyzen_symtable._cpu_NMI_interrupt = lookup_symbol("_cpu_NMI_interrupt");
     pmRyzen_symtable._NMIPI_enable = lookup_symbol("_NMIPI_enable");
     pmRyzen_symtable._i386_cpu_IPI = lookup_symbol("_i386_cpu_IPI");
-    pmRyzen_symtable_ready = 1;
     IOLog("AMDCPUSupport::enter link finished.\n");
     return IOService::init(dictionary);
 }
@@ -135,11 +165,23 @@ void AMDRyzenCPUPowerManagement::initWorkLoop() {
 
                 uint32_t cpu_num = cpu_number();
 
+                // 0.7.6 (Round 2 F1): cpu_number() 在超过 64 个逻辑核的机器上
+                // 可以 >= CPUInfo::MaxCpus，而下面所有 per-CPU 数组都是
+                // 定长 64 项。直接拿它当下标就是越界写 —— 而且发生在全核
+                // 关中断屏障内（内存损坏 + 整机死锁）。越界的核直接跳过。
+                if(cpu_num >= CPUInfo::MaxCpus) return;
+
                 uint64_t hwConfig;
                 // Never panic here: this block re-runs on every wake from sleep.
                 // A failed read — or a failed write — is remembered per CPU and
                 // retried by the regular timer tick below, so the init is not
                 // lost for this wake cycle.
+                //
+                // 0.7.6: 每次唤醒重置该 CPU 的重试预算 —— 唤醒路径上的重试
+                // 次数必须有界，否则一次永久性读失败会在每个 tick（50–1200 ms）
+                // 的无中断屏障里反复做一次读 + 一次写，直到天荒地老。
+                provider->hwcrInitRetryLeft[cpu_num] = PMRYZEN_HWCR_RETRY_BUDGET;
+                
                 if(provider->read_msr(kMSR_HWCR, &hwConfig)){
                     hwConfig |= (1 << 30);
                     provider->hwcrInitPending[cpu_num] = !provider->write_msr(kMSR_HWCR, hwConfig);
@@ -156,7 +198,11 @@ void AMDRyzenCPUPowerManagement::initWorkLoop() {
 
 
                 if(!pmRyzen_cpu_primary_in_core(cpu_num)) return;
-                uint8_t physical = pmRyzen_cpu_phys_num(cpu_num);
+                uint32_t physicalRaw = pmRyzen_cpu_phys_num(cpu_num);
+                // 0.7.6 (Round 2 F1): 物理核下标同样可能超出定长数组
+                // （>64 物理核的机器上 pcore_num 可达 255）。
+                if(physicalRaw >= CPUInfo::MaxCpus) return;
+                uint8_t physical = (uint8_t)physicalRaw;
 
 
                 //Init performance frequency counter.
@@ -202,16 +248,27 @@ void AMDRyzenCPUPowerManagement::initWorkLoop() {
             auto provider = static_cast<AMDRyzenCPUPowerManagement*>(obj);
             uint32_t cpu_num = cpu_number();
 
+            // 0.7.6 (Round 2 F1): per-CPU 数组都是定长 64 项，
+            // cpu_number() 在 >64 逻辑核的机器上可以越界 —— 越界的核跳过。
+            if(cpu_num >= CPUInfo::MaxCpus) return;
+
             // 0.7.5: retry the HWCR init on CPUs where the read or write
             // failed before. Every CPU only touches its own slot, so there is
             // no cross-CPU race. The master CPU also retries a failed P-state
             // table dump so a transient read failure is not silently final.
+            //
+            // 0.7.6: 重试次数现在有界（每 CPU 一个预算，唤醒时重置）。
+            // 以前是无界的：一个永久读失败的 HWCR 会让每个 tick 都在
+            // 无中断屏障里做一次读 + 一次写，永远下去。
             if(provider->hwcrInitPending[cpu_num]){
-                uint64_t hwConfig;
-                if(provider->read_msr(kMSR_HWCR, &hwConfig)){
-                    hwConfig |= (1 << 30);
-                    if(provider->write_msr(kMSR_HWCR, hwConfig))
-                        provider->hwcrInitPending[cpu_num] = false;
+                if(provider->hwcrInitRetryLeft[cpu_num] > 0){
+                    provider->hwcrInitRetryLeft[cpu_num]--;
+                    uint64_t hwConfig;
+                    if(provider->read_msr(kMSR_HWCR, &hwConfig)){
+                        hwConfig |= (1 << 30);
+                        if(provider->write_msr(kMSR_HWCR, hwConfig))
+                            provider->hwcrInitPending[cpu_num] = false;
+                    }
                 }
             }
 
@@ -223,8 +280,12 @@ void AMDRyzenCPUPowerManagement::initWorkLoop() {
                 if(provider->pstateDumpRetryLeft > 0){
                     provider->pstateDumpRetryLeft--;
                     provider->pstateDumpPending = !provider->dumpPstate(nullptr, false);
-                    if(provider->pstateDumpPending && provider->pstateDumpRetryLeft == 0 && ADDPR(debugEnabled))
-                        IOLog("AMDCPUSupport::initWorkLoop: P-state dump retries exhausted, keeping last-good table\n");
+                    // 0.7.6: 屏障内不做 IOLog —— IOLog 会取全局日志锁，
+                    // 而这里所有核都关着中断（XNU 还会 assert
+                    // "IOLog called with interrupts disabled"）。
+                    // 这里只置标志，由屏障外的调用方打印。
+                    if(provider->pstateDumpPending && provider->pstateDumpRetryLeft == 0)
+                        provider->pstateDumpRetryExhausted = true;
                 }
             }
 
@@ -232,12 +293,24 @@ void AMDRyzenCPUPowerManagement::initWorkLoop() {
 
             // Ignore hyper-threaded cores
             if(!pmRyzen_cpu_primary_in_core(cpu_num)) return;
-            uint8_t physical = pmRyzen_cpu_phys_num(cpu_num);
+            uint32_t physicalRaw = pmRyzen_cpu_phys_num(cpu_num);
+            // 0.7.6 (Round 2 F1): 物理核下标钳位（同上）。
+            if(physicalRaw >= CPUInfo::MaxCpus) return;
+            uint8_t physical = (uint8_t)physicalRaw;
 
 
             provider->calculateEffectiveFrequency(physical);
 
         }, provider);
+        
+        // 0.7.6: 屏障外的报告点。屏障内所有核都关着中断，IOLog 会取全局
+        // 日志锁（XNU 还会 assert "IOLog called with interrupts disabled"），
+        // 因此重试耗尽的消息必须在这里打印，而不是在屏障内。
+        if(provider->pstateDumpRetryExhausted){
+            provider->pstateDumpRetryExhausted = false;
+            if (ADDPR(debugEnabled))
+                IOLog("AMDCPUSupport::initWorkLoop: P-state dump retries exhausted, keeping last-good table\n");
+        }
         
         //Read stats from package.
         provider->updatePackageTemp();
@@ -332,7 +405,10 @@ bool AMDRyzenCPUPowerManagement::start(IOService *provider){
     IOLog("AMDCPUSupport::start Family %02Xh, Model %02Xh\n", cpuFamily, cpuModel);
     
     CPUInfo::getCpuid(0x80000005, 0, &cpuid_eax, &cpuid_ebx, &cpuid_ecx, &cpuid_edx);
-    cpuCacheL1_perCore = (cpuid_ecx >> 24) + (cpuid_ecx >> 24);
+    // 0.7.6: 复制粘贴错误修正。CPUID Fn80000005: ECX[31:24] = L1 数据缓存
+    // 每核容量(KB)，EDX[31:24] = L1 指令缓存每核容量(KB)。原来把 ECX 加了
+    // 两次（数据缓存翻倍、指令缓存丢失），启动日志里的 L1 容量是错的。
+    cpuCacheL1_perCore = (cpuid_ecx >> 24) + (cpuid_edx >> 24);
     
     
     CPUInfo::getCpuid(0x80000006, 0, &cpuid_eax, &cpuid_ebx, &cpuid_ecx, &cpuid_edx);
@@ -370,9 +446,20 @@ bool AMDRyzenCPUPowerManagement::start(IOService *provider){
     }
     
     uint64_t rapl = 0;
-    if(!read_msr(kMSR_RAPL_PWR_UNIT, &rapl))
-        panic("AMDCPUSupport: unable to read power unit\n");
+    // 0.7.6 (Round 2 P2): 原来是 panic() —— start() 路径上的内核 panic。
+    // 与"缺失即降级"的原则冲突：读不到 RAPL 单位只影响包级功率读数，
+    // 不该把整台机器带走。降级为"功率测量不可用"（updatePackageEnergy 跳过）。
+    if(!read_msr(kMSR_RAPL_PWR_UNIT, &rapl)){
+        IOLog("AMDCPUSupport::start WARN: unable to read power unit, "
+              "package power measurement disabled\n");
+        raplValid = false;
+    } else {
+        raplValid = true;
+    }
     
+    // AMD MSRC001_0299 (RAPL Power Unit) 的位域：
+    //   TU [19:16] / ESU [12:8] / PU [3:0]
+    // 下面的掩码与该布局一致（ESU 5 位、TU 4 位）。
     pwrTimeUnit = pow((double)0.5, (double)((rapl >> 16) & 0xf));
     pwrEnergyUnit = pow((double)0.5, (double)((rapl >> 8) & 0x1f));
 //    IOLog("a %lld\n", (long long)(pwrTimeUnit * 10000000000));
@@ -396,9 +483,8 @@ bool AMDRyzenCPUPowerManagement::start(IOService *provider){
         return false;
     }
     
-//    while (!pmRyzen_symtable_ready) {
-//        IOSleep(200);
-//    }
+// 0.7.6: 原来这里有一个等待 pmRyzen_symtable_ready 的死循环。
+// 该变量只写不读（等待它的代码早已被注释掉），已随清理一并删除。
     
     void *safe_wrmsr = pmRyzen_symtable._wrmsr_carefully;
     if(!safe_wrmsr){
@@ -418,13 +504,41 @@ bool AMDRyzenCPUPowerManagement::start(IOService *provider){
     }
 
     cpu_to_processor = (processor_t(*)(int))pmRyzen_symtable._cpu_to_processor;
+    if(!pmRyzen_symtable._cpu_to_processor){
+        IOLog("AMDCPUSupport::start WARN: Can't find _cpu_to_processor\n");
+    }
 
-    xnuTSCFreq = *((uint64_t*)pmRyzen_symtable._tscFreq);
+    // 0.7.6: _tscFreq 是一个指向内核变量的指针。符号缺失时直接解引用
+    // 会在启动阶段把内核带崩（start() 里的空指针解引用）。
+    // 现在缺失时保留默认值并关闭依赖它的包级功率测量。
+    if(pmRyzen_symtable._tscFreq){
+        xnuTSCFreq = *((uint64_t*)pmRyzen_symtable._tscFreq);
+        tscFreqValid = true;
+    } else {
+        IOLog("AMDCPUSupport::start WARN: Can't find _tscFreq, package power measurement disabled\n");
+    }
 
-    pmRyzen_init(this);
-
+    // 0.7.6: pmRyzen_init() 失败（PM 相关符号缺失）时不能继续发布服务：
+    // 带着 0 个物理核发布出去，用户态的 logical/physical 除法会直接
+    // 把内核带崩（整数除零）。这里让 start() 失败，App 会提示 kext 未加载。
+    if(!pmRyzen_init(this)){
+        IOLog("AMDCPUSupport::start failed: PM registration unavailable\n");
+        return false;
+    }
+    
     totalNumberOfLogicalCores = pmRyzen_num_logi;
     totalNumberOfPhysicalCores = pmRyzen_num_phys;
+    
+    if(totalNumberOfPhysicalCores == 0 || totalNumberOfLogicalCores == 0
+       || totalNumberOfPhysicalCores > CPUInfo::MaxCpus){
+        IOLog("AMDCPUSupport::start failed: bad CPU topology (%u physical / %u logical)\n",
+              totalNumberOfPhysicalCores, totalNumberOfLogicalCores);
+        // 0.7.6 (Round 2 F7): pmRyzen_init() 此时已经注册过 pmDispatch。
+        // 直接返回 false 会让 XNU 侧残留 pmRyzen_machine_idle 回调
+        // （指向一个 pmRyzen_cpus[] 全零的半初始化对象）⇒ 显式注销。
+        pmRyzen_stop();
+        return false;
+    }
 
     IOLog("AMDCPUSupport::start, Physical Count: %u, Logical Count %u.\n",
               totalNumberOfPhysicalCores, totalNumberOfLogicalCores);
@@ -575,6 +689,36 @@ bool AMDRyzenCPUPowerManagement::write_msr(uint32_t addr, uint64_t value){
     return true;
 }
 
+// 0.7.6: 统一告警入口。
+//
+// kunc_alert 在 _KUNCUserNotificationDisplayAlert 解析失败时保持 nullptr。
+// 以前的 UserClient 在 hasPrivilege() 与 externalMethod() 里各有一处
+// 无条件解引用（(*(fProvider->kunc_alert))(...)）——
+// 与 cpp:50 的 kextloadAlerts++（符号缺失时每轮自增）组合后，
+// 用户态的第一次调用就能把内核带崩。
+//
+// 现在统一在这里判空：
+//   - 弹窗可用：显示弹窗，response 有效，返回 true；
+//   - 弹窗不可用：降级为 IOLog，response 置 0，返回 false。
+//     "没问到用户" 绝不能被当成 "用户同意了" —— 调用方必须自行降级。
+bool AMDRyzenCPUPowerManagement::presentAlert(const char *title, const char *body,
+                                               const char *btn1, const char *btn2, const char *btn3,
+                                               unsigned int *response){
+    // 0.7.6 (Round 2 F4): 哨兵值用 UINT_MAX 而不是 0 —— 0 是一个**合法的按钮下标**
+    // （CFUserNotification 的 default 按钮）。用 0 当"没问到用户"的话，
+    // 任何忽略 bool 返回值的调用方都会把"没问"误读成"用户按了默认键"。
+    if(response) *response = UINT_MAX;
+    
+    if(!kunc_alert){
+        IOLog("AMDCPUSupport: user alert unavailable (%s): %s\n",
+              title ? title : "", body ? body : "");
+        return false;
+    }
+    
+    (*kunc_alert)(0, 0, NULL, NULL, NULL, title, body, btn1, btn2, btn3, response);
+    return true;
+}
+
 void AMDRyzenCPUPowerManagement::registerRequest(){
     uint32_t now = (uint32_t)(getCurrentTimeNs() / 1000000);
     
@@ -582,30 +726,9 @@ void AMDRyzenCPUPowerManagement::registerRequest(){
     timeOfLastMissedRequest = now;
 }
 
-void AMDRyzenCPUPowerManagement::updateClockSpeed(uint8_t physical){
-    
-    uint64_t msr_value_buf = 0;
-    bool err = !read_msr(kMSR_HARDWARE_PSTATE_STATUS, &msr_value_buf);
-    if(err) return;
-    
-    //Convert register value to clock speed.
-    uint32_t eax = (uint32_t)(msr_value_buf & 0xffffffff);
-    
-    // MSRC001_0293
-    // CurHwPstate [24:22]
-    // CurCpuVid [21:14]
-    // CurCpuDfsId [13:8]
-    // CurCpuFid [7:0]
-    float curCpuDfsId = (float)((eax >> 8) & 0x3f);
-    float curCpuFid = (float)(eax & 0xff);
-    
-    float clock = curCpuFid / curCpuDfsId * 200.0f;
-    
-//    PStateCur_perCore[physical] = curHwPstate;
-    effFreq_perCore[physical] = clock;
-    
-    //    IOLog("AMDCPUSupport::updateClockSpeed: %u\n", curHwPstate);
-}
+// 0.7.6: updateClockSpeed() 已删除 —— 它没有任何调用点（死代码）。
+// effFreq_perCore 由 calculateEffectiveFrequency()（APERF/MPERF 差值）维护，
+// 不再由 P-state 状态寄存器推导。
 
 void AMDRyzenCPUPowerManagement::calculateEffectiveFrequency(uint8_t physical){
     
@@ -817,6 +940,11 @@ void AMDRyzenCPUPowerManagement::updatePackageTemp(){
 
 void AMDRyzenCPUPowerManagement::updatePackageEnergy(){
     
+    // 0.7.6: _tscFreq 缺失时 xnuTSCFreq 是默认值（1），除出来的"秒"是
+    // 垃圾值，功率读数毫无意义。这种情况下干脆不更新，保留上一次读数。
+    // RAPL 单位寄存器读不到时同理（raplValid == false）。
+    if(!tscFreqValid || !raplValid) return;
+    
     uint64_t ctsc = rdtsc64();
 
     uint64_t msr_value_buf = 0;
@@ -946,10 +1074,16 @@ void AMDRyzenCPUPowerManagement::restoreWakeState(){
         // TODO(0.7.6): this read_msr still takes cpu_lock on the master
         // thread while 15 other CPUs are spinning in the rendezvous
         // barrier below. Same shape as the 2026-08-26 panic but in the
-        // wake path; tracked in
-        // docs/Task/Archive/2026-08/AMDRyzenCPUPM_SLEEP_RDMSR_ROOTCAUSE.md
-        // §4 risk #5. Fix by caching HWCR at start() and refreshing only
+        // wake path. Fix by caching HWCR at start() and refreshing only
         // when a deliberate CPB change is requested.
+        //
+        // 0.7.6 修正：原来这里引用的 "§4 risk #5" 在根因文档中并不存在
+        // （该文档没有 §/risk 分节编号），现改为指向确实存在的小节：
+        // docs/Task/Archive/2026-08/AMDRyzenCPUPM_SLEEP_RDMSR_ROOTCAUSE.md
+        //   §真正的根因（rdmsr_carefully → cpu_lock 抢占）
+        //   §仍存在的不确定性
+        // 实施方案见 docs/Task/Active/AMDRyzenCPUPM_076_PM_PATH_OPTIMIZATION_PLAN.md
+        // 的 T4（HWCR 缓存化）。
         uint64_t hwcr;
         if (read_msr(kMSR_HWCR, &hwcr)) {
             if (sleepState.cpb) {
@@ -1028,7 +1162,6 @@ EXPORT extern "C" kern_return_t amdryzencpupm_kern_start(kmod_info_t *, void *) 
     
 //    IOLog("AMDCPUSupport::enter dlinking..\n");
 //
-//    pmRyzen_symtable_ready = 0;
 //
 //    pmRyzen_symtable._wrmsr_carefully = lookup_symbol("_wrmsr_carefully");
 //    pmRyzen_symtable._KUNCUserNotificationDisplayAlert = lookup_symbol("_KUNCUserNotificationDisplayAlert");
@@ -1039,7 +1172,6 @@ EXPORT extern "C" kern_return_t amdryzencpupm_kern_start(kmod_info_t *, void *) 
 //    pmRyzen_symtable._cpu_NMI_interrupt = lookup_symbol("_cpu_NMI_interrupt");
 //    pmRyzen_symtable._NMIPI_enable = lookup_symbol("_NMIPI_enable");
 //    pmRyzen_symtable._i386_cpu_IPI = lookup_symbol("_i386_cpu_IPI");
-//    pmRyzen_symtable_ready = 1;
 //    IOLog("AMDCPUSupport::enter link finished.\n");
     
     return KERN_SUCCESS;

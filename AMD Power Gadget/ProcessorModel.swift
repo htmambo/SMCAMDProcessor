@@ -51,7 +51,7 @@ class ProcessorModel {
 
     /// Newest kext version this app was built and tested against.
     /// Only used to tell the user that a newer kext is available.
-    private static let latestKnownVersion = "0.7.5"
+    private static let latestKnownVersion = "0.7.6"
 
     private static func versionComponents(_ version : String) -> [Int] {
         version.split(separator: ".").map { Int($0) ?? 0 }

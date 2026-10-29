@@ -23,6 +23,10 @@
 #define MOD_NAME pmARyzen
 #define XNU_MAX_CPU 64
 
+// 0.7.6: pmRyzen_stop() 等待 CPU 离开 idle 状态时的最大迭代次数。
+// 用来保证停止路径一定会收敛（exit_idle 恒返回 true 时旧代码会死循环）。
+#define PMRYZEN_EXIT_IDLE_MAX_SPINS 1000
+
 #define MSR_PSTATE_CTL 0xC0010062
 #define MSR_PSTATE_0 0xC0010064
 
@@ -87,7 +91,10 @@ typedef struct pmProcessor{
     
 } pmProcessor_t;
 
-void pmRyzen_init(void*);
+// 0.7.6: 返回 false 表示 PM 注册不可用（符号缺失等）—— 调用方必须让
+// start() 失败，不能带着 0 个核继续发布服务（否则用户态会拿 logical/physical
+// 做除法，直接把内核带崩）。
+boolean_t pmRyzen_init(void*);
 void pmRyzen_stop(void);
 void pmRyzen_PState_reset(void);
 float pmRyzen_avgload_pcpu(uint32_t);
@@ -100,16 +107,33 @@ int pmRyzen_choose_cpu(int,int,int);
 
 pmProcessor_t* pmRyzen_get_processor(uint32_t);
 
-inline uint32_t pmRyzen_cpu_phys_num(uint32_t cpunum){
-    return pmRyzen_cpunum_to_lcpu[cpunum]->core->pcore_num;
+// 0.7.6: 这三个 helper 会在全核屏障内被调用（AMDRyzenCPUPowerManagement.cpp
+// 的 init 块与常规 tick）。屏障内一旦越界读或解引用空指针，就是整机死锁
+// （NMI 也进不来）。因此这里做完整的边界与空指针检查，失败时返回保守值：
+//   - phys_num 失败 → 0（该核的频率数据落在 0 号槽，良性）
+//   - primary_in_core 失败 → false（该核被跳过采样，良性）
+//   - is_master 失败 → false（master 不刷新 P-state 表，功能降级但不崩）
+inline x86_lcpu_t *pmRyzen_get_lcpu(uint32_t cpunum){
+    if(cpunum >= XNU_MAX_CPU) return NULL;
+    return pmRyzen_cpunum_to_lcpu[cpunum];
 }
 
-inline uint32_t pmRyzen_cpu_primary_in_core(uint32_t cpunum){
-    return pmRyzen_cpunum_to_lcpu[cpunum]->core->lcpus == pmRyzen_cpunum_to_lcpu[cpunum];
+inline uint32_t pmRyzen_cpu_phys_num(uint32_t cpunum){
+    x86_lcpu_t *lcpu = pmRyzen_get_lcpu(cpunum);
+    if(lcpu == NULL || lcpu->core == NULL) return 0;
+    return lcpu->core->pcore_num;
+}
+
+inline boolean_t pmRyzen_cpu_primary_in_core(uint32_t cpunum){
+    x86_lcpu_t *lcpu = pmRyzen_get_lcpu(cpunum);
+    if(lcpu == NULL || lcpu->core == NULL) return false;
+    return lcpu->core->lcpus == lcpu;
 }
 
 inline boolean_t pmRyzen_cpu_is_master(uint32_t cpunum){
-    return pmRyzen_cpunum_to_lcpu[cpunum]->master;
+    x86_lcpu_t *lcpu = pmRyzen_get_lcpu(cpunum);
+    if(lcpu == NULL) return false;
+    return lcpu->master;
 }
 
 

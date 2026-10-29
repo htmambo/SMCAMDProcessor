@@ -166,22 +166,22 @@ int ISSuperIONCT67XXFamily::getNumberOfFans(){
 }
 
 const char *ISSuperIONCT67XXFamily::getReadableStringForFan(int fan){
-    if(fan > activeFansOnSystem) return nullptr;
+    if(fan < 0 || fan >= activeFansOnSystem) return nullptr;
     return kFAN_READABLE_STRS[fan];
 }
 
 uint32_t ISSuperIONCT67XXFamily::getRPMForFan(int fan){
-    if(fan > activeFansOnSystem) return 0;
+    if(fan < 0 || fan >= activeFansOnSystem) return 0;
     return fanRPMs[fan];
 }
 
 bool ISSuperIONCT67XXFamily::getFanAutoControlMode(int fan){
-    if(fan > activeFansOnSystem) return 0;
+    if(fan < 0 || fan >= activeFansOnSystem) return 0;
     return fanControlMode[fan] != 0;
 }
 
 uint8_t ISSuperIONCT67XXFamily::getFanThrottle(int fan){
-    if(fan > activeFansOnSystem) return 0;
+    if(fan < 0 || fan >= activeFansOnSystem) return 0;
     return fanThrottles[fan];
 }
 
@@ -205,12 +205,12 @@ void ISSuperIONCT67XXFamily::updateFanControl(){
 }
 
 void ISSuperIONCT67XXFamily::overrideFanControl(int fan, uint8_t thr){
-    if(fan >= activeFansOnSystem) return;
+    if(fan < 0 || fan >= activeFansOnSystem) return;
     writeByte(kFAN_CTRL_MODE_REGS[fan], 0);
     writeByte(kFAN_PWMCMD_REGS[fan], thr);
 }
 
 void ISSuperIONCT67XXFamily::setDefaultFanControl(int fan){
-    if(fan >= activeFansOnSystem) return;
+    if(fan < 0 || fan >= activeFansOnSystem) return;
     writeByte(kFAN_CTRL_MODE_REGS[fan], fanDefaultControlMode[fan]);
 }

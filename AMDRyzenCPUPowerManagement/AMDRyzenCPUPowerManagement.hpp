@@ -153,11 +153,30 @@ public:
     bool write_msr(uint32_t addr, uint64_t value);
     
     
-    void updateClockSpeed(uint8_t physical);
     void calculateEffectiveFrequency(uint8_t physical);
     void updateInstructionDelta(uint8_t physical);
     void applyPowerControl(uint8_t pstate);
     uint8_t getPowerControl();
+
+    /**
+     *  0.7.6: 统一的用户告警入口。
+     *
+     *  kunc_alert 在 _KUNCUserNotificationDisplayAlert 解析失败时保持 nullptr，
+     *  而 UserClient 以前是无条件解引用（hasPrivilege() 与 externalMethod()
+     *  各一处）—— 用户态一次调用即可把内核带崩。
+     *
+     *  这里统一判空：
+     *  - 弹窗可用：显示弹窗，response 有效，返回 true；
+     *  - 弹窗不可用：降级为 IOLog，response 置 UINT_MAX，返回 false
+     *    （"没有问到用户" ⇒ 调用方不得把结果当成用户同意）。
+     *
+     *  0.7.6 (Round 2 F4)：哨兵值是 UINT_MAX 而不是 0 —— 0 是合法的按钮下标
+     *  （CFUserNotification 的 default 按钮），用它当"没问到用户"的哨兵会
+     *  被误读成"用户点了第一个按钮"。
+     */
+    bool presentAlert(const char *title, const char *body,
+                      const char *btn1, const char *btn2, const char *btn3,
+                      unsigned int *response);
     
     bool setCPBState(bool enabled);
     bool getCPBState();
@@ -236,6 +255,19 @@ public:
     // to be retried. Each CPU only touches its own slot, so no cross-CPU race.
     bool hwcrInitPending[CPUInfo::MaxCpus] {};
 
+    // Per-CPU retry budget for the HWCR init. 0.7.6: the retry used to be
+    // unbounded — a permanently unreadable HWCR meant one read + one write
+    // inside the no-interrupt barrier on every single tick, forever. The
+    // budget is refilled on each wake re-init. Each CPU only touches its own
+    // slot, so no cross-CPU race.
+    uint8_t hwcrInitRetryLeft[CPUInfo::MaxCpus] {};
+
+    // 0.7.6: set when the cached P-state table could not be (re)read AND the
+    // bounded retry budget ran out. The work loop reports it OUTSIDE the
+    // rendezvous barrier (IOLog inside a no-interrupt barrier is exactly what
+    // the 2026-08-26 panic taught us not to do).
+    bool pstateDumpRetryExhausted {};
+
     // Set when the cached P-state table could not be (re)read; the work loop
     // retry tick re-runs dumpPstate() on the master CPU until it succeeds.
     bool pstateDumpPending {};
@@ -285,8 +317,15 @@ private:
     double pwrTimeUnit = 0;
     double pwrEnergyUnit = 0;
     uint64_t pwrLastTSC = 0;
+    // 0.7.6 (Round 2 P2): RAPL 单位寄存器读不到时（原代码在这里 panic），
+    // 功率测量整体停用，而不是把机器带走。
+    bool raplValid = false;
     
     uint64_t xnuTSCFreq = 1;
+    // 0.7.6: _tscFreq is a pointer to a kernel variable. When the symbol is
+    // missing, dereferencing it panicked the kernel at start(); the frequency
+    // is now validated and the dependent power measurement is skipped.
+    bool tscFreqValid = false;
     int (*wrmsr_carefully)(uint32_t, uint32_t, uint32_t) {nullptr};
     processor_t(*cpu_to_processor)(int);
     kern_return_t(*processor_shutdown)(processor_t);

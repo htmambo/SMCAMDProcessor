@@ -118,23 +118,23 @@ int ISSuperIONCT668X::getNumberOfFans(){
 }
 
 const char *ISSuperIONCT668X::getReadableStringForFan(int fan){
-    if(fan > activeFansOnSystem) return nullptr;
+    if(fan < 0 || fan >= activeFansOnSystem) return nullptr;
     //TODO: label fans
     return kFAN_READABLE_STRS[0];
 }
 
 uint32_t ISSuperIONCT668X::getRPMForFan(int fan){
-    if(fan > activeFansOnSystem) return 0;
+    if(fan < 0 || fan >= activeFansOnSystem) return 0;
     return fanRPMs[fan];
 }
 
 bool ISSuperIONCT668X::getFanAutoControlMode(int fan){
-    if(fan > activeFansOnSystem) return 0;
+    if(fan < 0 || fan >= activeFansOnSystem) return 0;
     return fanControlMode[fan] != 0;
 }
 
 uint8_t ISSuperIONCT668X::getFanThrottle(int fan){
-    if(fan > activeFansOnSystem) return 0;
+    if(fan < 0 || fan >= activeFansOnSystem) return 0;
     return fanThrottles[fan];
 }
 
@@ -159,7 +159,7 @@ void ISSuperIONCT668X::updateFanControl(){
 }
 
 void ISSuperIONCT668X::overrideFanControl(int fan, uint8_t thr){
-    if(fan >= activeFansOnSystem) return;
+    if(fan < 0 || fan >= activeFansOnSystem) return;
     writeByte(FAN_CFG_CTRL_REG, FAN_CFG_REQ);
     IOSleep(2);
     writeByte(FAN_PWMCMD_REGS(fan), thr);
@@ -167,6 +167,6 @@ void ISSuperIONCT668X::overrideFanControl(int fan, uint8_t thr){
 }
 
 void ISSuperIONCT668X::setDefaultFanControl(int fan){
-    if(fan >= activeFansOnSystem) return;
+    if(fan < 0 || fan >= activeFansOnSystem) return;
     
 }

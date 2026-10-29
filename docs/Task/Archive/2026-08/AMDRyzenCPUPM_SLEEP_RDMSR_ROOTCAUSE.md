@@ -203,7 +203,9 @@ sleep 风暴只是放大命中概率的乘数，不是根因。
 ### 下一步（待实施）
 
 完整修复计划见
-[`docs/Task/Active/AMDRyzenCPUPM_SLEEP_RDMSR_FIX_PLAN.md`](../../Task/Active/AMDRyzenCPUPM_SLEEP_RDMSR_FIX_PLAN.md)。
+[`docs/Task/Archive/2026-08/AMDRyzenCPUPM_SLEEP_RDMSR_FIX_PLAN.md`](AMDRyzenCPUPM_SLEEP_RDMSR_FIX_PLAN.md)
+（0.7.6 后续优化见
+[`docs/Task/Active/AMDRyzenCPUPM_076_PM_PATH_OPTIMIZATION_PLAN.md`](../../Active/AMDRyzenCPUPM_076_PM_PATH_OPTIMIZATION_PLAN.md)）。
 
 核心方向（不重叠于 0.7.4）：
 
