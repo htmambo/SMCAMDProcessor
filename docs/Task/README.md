@@ -2,6 +2,8 @@
 
 ## Active Tasks
 
+- 🟡 [AMDRyzenCPUPM 唤醒 P-state 恢复修复](Active/AMDRyzenCPUPM_WAKE_PSTATE_RESTORE_FIX_PLAN.md) — 实施中（2026-11-17）
+  - 唤醒恢复下沉 work loop、写入与读回校验、有界重试、保留 last-known-good 表，以及 App 非连续档位显示和真实索引映射
 - 🟡 [AMDRyzenCPUPM 076_PM_PATH_OPTIMIZATION — kext 0.7.6 PM 路径优化方案](Active/AMDRyzenCPUPM_076_PM_PATH_OPTIMIZATION_PLAN.md) — 实施中（2026-10-29）
   - 主线：清除关中断上下文中的 MSR 访问（idle 回调 + 全核屏障）、唤醒恢复下沉 work loop、修复两处用户态可触发的内核 panic 路径、`pmRyzen_stop()` 死循环与功率换算错误
   - 审计出 33 项问题（2 HIGH / 1 BLOCKER / 10 MAJOR / 7 MEDIUM / 9 MINOR / 2 LOW / 2 NIT）；Round 1 核验 PARTIAL（修正 1 项误报 + 8 项表述，新增 11 项）、Round 2 核验 CONDITIONAL（F1/F2/F3 已修，另发现 2 项既有 MAJOR）、Round 3 核验 CONDITIONAL（M1/M2/M3 已修，另发现扇区索引族越界）

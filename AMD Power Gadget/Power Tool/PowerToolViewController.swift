@@ -14,6 +14,7 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
     var timer : Timer?
     
     var vaildStatesClock : [Float] = []
+    var vaildStateIndexes : [Int] = []
     
     @IBOutlet weak var basicLabel: NSTextField!
     @IBOutlet weak var overviewSpeedShift: CPUSpeedShiftView!
@@ -104,6 +105,7 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         vaildStatesClock = ProcessorModel.shared.getVaildPStateClocks()
+        vaildStateIndexes = ProcessorModel.shared.getVaildPStateIndexes()
         cpuFreqGraph.setup(totalCores: ProcessorModel.shared.getNumOfCore())
 
         sampleCPUGraph()
@@ -153,8 +155,12 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
         let a = ProcessorModel.shared.getInstructionDelta()
         let freqs = Array(metric[3...metric.count-1])
         
-        cpuFreqGraph.setFreqData(data: Array(metric[3...metric.count-1]),
-                                 states: vaildStatesClock, load: load)
+        // An empty state list (all P-states disabled, or the table has not
+        // been read yet) would make the graph force-unwrap an empty array.
+        if !vaildStatesClock.isEmpty {
+            cpuFreqGraph.setFreqData(data: Array(metric[3...metric.count-1]),
+                                     states: vaildStatesClock, load: load)
+        }
 
         freqMax = max(freqMax, freqs.max()!)
         instDelta += a.reduce(0, +)
@@ -174,10 +180,12 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
     }
     
     @IBAction func onOverviewSpeedStep(_ sender: Any) {
+        let selected = overviewSpeedShift.selectedItem
+        guard vaildStateIndexes.indices.contains(selected) else { return }
         ProcessorModel.shared.setPPM(enabled: false)
         // 在系统日志中记录要设置的speed并带上文字描述
-        print("set speed:", overviewSpeedShift.selectedItem)
-        ProcessorModel.shared.setPState(state: overviewSpeedShift.selectedItem)
+        print("set speed:", vaildStateIndexes[selected])
+        ProcessorModel.shared.setPState(state: vaildStateIndexes[selected])
         // 输出当前设置的speed
         print("current speed:", ProcessorModel.shared.getPState())
         updateASA()
@@ -225,10 +233,12 @@ class PowerToolViewController: NSViewController, NSWindowDelegate {
     func updatePStateDef() {
         ProcessorModel.shared.refreshPStateDef()
         vaildStatesClock = ProcessorModel.shared.getVaildPStateClocks()
+        vaildStateIndexes = ProcessorModel.shared.getVaildPStateIndexes()
         let pstateCur = ProcessorModel.shared.getPState()
         let s = ProcessorModel.shared.getPPM()
         let pdt = vaildStatesClock.map{ String(format: NSLocalizedString("%dMHz", comment: "Frequency of a speed step option"), Int($0)) }
-        overviewSpeedShift.setOptions(newOptions: pdt, selection: s ? -1 : pstateCur)
+        let selection = s ? -1 : (vaildStateIndexes.firstIndex(of: pstateCur) ?? -1)
+        overviewSpeedShift.setOptions(newOptions: pdt, selection: selection)
     }
     
     func updateCPB() {

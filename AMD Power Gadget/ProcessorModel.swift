@@ -22,7 +22,6 @@ class ProcessorModel {
     private var instructionDelta : [UInt64] = []
     private var loadIndex : [Float] = []
     private var PStateDefClock : [Float] = []
-    private var vaildPStateLength : Int = 0
     
     private var cpuListedAsSupported : Bool = false
     
@@ -295,15 +294,6 @@ class ProcessorModel {
     private func loadPStateDef(){
 
         PStateDef = kernelGetUInt64(count: 8, selector: 0)
-        print(PStateDef)
-        var i = 0
-        while i < 8 {
-            if (PStateDef[i] & 0x8000000000000000) == 0 { //LOL Swift
-                break
-            }
-            i += 1
-        }
-        vaildPStateLength = i
         
     }
     
@@ -339,6 +329,7 @@ class ProcessorModel {
     }
     
     func refreshPStateDef() {
+        loadPStateDef()
         loadPStateDefClock()
     }
     
@@ -367,8 +358,18 @@ class ProcessorModel {
         return PStateDef
     }
     
+    func getVaildPStateIndexes() -> [Int] {
+        return PStateDef.enumerated().compactMap { index, definition in
+            let enabled = (definition & 0x8000000000000000) != 0
+            let valid = (definition & 0xff) != 0 && ((definition >> 8) & 0x3f) != 0
+            return enabled && valid ? index : nil
+        }
+    }
+
     func getVaildPStateClocks() -> [Float] {
-        return Array(PStateDefClock[0...vaildPStateLength-1])
+        return getVaildPStateIndexes().compactMap { index in
+            index < PStateDefClock.count ? PStateDefClock[index] : nil
+        }
     }
     
     func getMetric(forced : Bool) -> [Float] {

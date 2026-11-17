@@ -194,9 +194,13 @@ public:
     
     void registerRequest();
     
-    bool dumpPstate(uint64_t buf[8], bool allowLog = true);
-    void writePstate(const uint64_t *buf);
-    void restoreWakeState();
+    bool dumpPstate(uint64_t buf[8], bool allowLog = true, bool updateCache = true,
+                    uint8_t *readOkOut = nullptr);
+    void updatePstateCache(const uint64_t *buf, uint8_t readOkMask = 0xff);
+    bool verifyPstateTable(const uint64_t *expected, bool allowLog = false);
+    bool writePstate(const uint64_t *buf);
+    bool restoreWakeState();
+    bool verifyWakePstate();
     
     bool initSuperIO(uint16_t* chipIntel);
     
@@ -275,8 +279,13 @@ public:
     // Bounded retry budget for the pstateDumpPending re-dump: every rdmsr
     // takes cpu_lock inside the rendezvous barrier, so a permanently
     // unreadable P-state MSR must not retry every tick forever. Refilled on
-    // each wake re-init and on every explicit user writePstate().
+    // each work-loop re-init; explicit writes use immediate readback instead.
     uint8_t pstateDumpRetryLeft { 20 };
+
+    bool wakePstateRestorePending {};
+    bool wakePstateVerifyPending {};
+    bool wakePstateSkipInitDump {};
+    uint8_t wakePstateRetryLeft {};
 
     // Set once lastAPERF/lastMPERF hold a real sample, so a failed boot-time
     // seed does not yield one frequency sample scaled from cumulative counters.

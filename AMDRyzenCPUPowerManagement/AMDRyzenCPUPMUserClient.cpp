@@ -405,7 +405,11 @@ IOReturn AMDRyzenCPUPMUserClient::externalMethod(uint32_t selector, IOExternalMe
                 return kIOReturnBadArgument;
             
             
-            fProvider->writePstate(arguments->scalarInput);
+            // Distinct from kIOReturnNotPrivileged above: the write was
+            // attempted but did not survive readback verification. The app
+            // must not report this as a privilege/authorization failure.
+            if(!fProvider->writePstate(arguments->scalarInput))
+                return kIOReturnIOError;
             
             break;
         }

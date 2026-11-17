@@ -34,7 +34,8 @@ class PStateEditorViewController: NSViewController, NSTableViewDelegate, NSTable
         r["IddDiv"] = UInt32((v >> 30) & 0x3)
         r["IddValue"] = UInt32((v >> 22) & 0xff)
         r["CpuVid"] = UInt32((v >> 14) & 0xff)
-        r["CpuDfsId"] = UInt32((v >> 8) & 0x1f)
+        // CpuDfsId is bits [13:8] — six bits, same mask the kernel uses.
+        r["CpuDfsId"] = UInt32((v >> 8) & 0x3f)
         r["CpuFid"] = UInt32(v & 0xff)
 
         
@@ -48,7 +49,7 @@ class PStateEditorViewController: NSViewController, NSTableViewDelegate, NSTable
         r |= (UInt64(d["IddDiv"]!) & 0x3) << 30
         r |= (UInt64(d["IddValue"]!) & 0xff) << 22
         r |= (UInt64(d["CpuVid"]!) & 0xff) << 14
-        r |= (UInt64(d["CpuDfsId"]!) & 0x1f) << 8
+        r |= (UInt64(d["CpuDfsId"]!) & 0x3f) << 8
         r |= UInt64(d["CpuFid"]!) & 0xff
         
         return r
@@ -81,8 +82,13 @@ class PStateEditorViewController: NSViewController, NSTableViewDelegate, NSTable
     @IBAction func apply(_ sender: Any) {
         let arr = data.map{ dict2Value(d: $0) }
         let err = ProcessorModel.shared.setPState(def: arr)
-        if err != 0 {
+        if err == Int(kIOReturnNotPrivileged) {
             alertNoPrivilege()
+        } else if err != 0 {
+            // The driver attempted the write but the readback verification
+            // failed — not an authorization problem, so do not show the
+            // "run as root / -amdpnopchk" alert for it.
+            alertPStateVerifyFailed()
         } else {
             changed = false
         }
@@ -157,6 +163,21 @@ class PStateEditorViewController: NSViewController, NSTableViewDelegate, NSTable
         alert.beginSheetModal(for: view.window!, completionHandler: nil)
     }
     
+    func alertPStateVerifyFailed(){
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("PStateDef Was Not Verified", comment: "Alert title shown when the driver could not read the P-State table back after writing it")
+        alert.informativeText = NSLocalizedString("""
+        The driver wrote the P-State table, but reading it back did not match the requested values,
+        so the write is reported as failed. The cached table was left unchanged; the CPU may now
+        hold a partially applied table.
+
+        Re-apply the settings, or reboot to return to the firmware defaults.
+        """, comment: "Alert message shown when P-State write verification fails")
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: NSLocalizedString("Done", comment: "Button title to close the alert"))
+        alert.beginSheetModal(for: view.window!, completionHandler: nil)
+    }
+
     @IBAction func revert(_ sender: Any) {
         data = ProcessorModel.shared.getPStateDef().map({value2Dict(v: $0)})
         tableView.reloadData()
